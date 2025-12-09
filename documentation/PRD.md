@@ -1,8 +1,9 @@
-# Prompteka MCP Server - Product Requirements Document v2
+# Prompteka MCP Server - Product Requirements Document v3
 
 **Status**: MVP Phase (Read-Only → Queued Writes)
 **Updated**: December 9, 2025
 **Protocol Version**: 1.0
+**Codex Review**: All gaps addressed (v2 → v3)
 
 ---
 
@@ -740,6 +741,346 @@ AI: get_prompt(id)
 
 ---
 
+## Local-Only & App Store Compliance
+
+### Network & Privacy Policy
+
+**The MCP server is strictly local-only**:
+- ✅ No network calls whatsoever
+- ✅ No external API communication
+- ✅ No telemetry or analytics
+- ✅ No data transmission outside the machine
+- ✅ Operates entirely within `~/Library/Application Support/prompteka/`
+
+**App Store Compliance**:
+- Runs only when explicitly invoked by Claude or AI assistant
+- Accesses ONLY Prompteka data directory
+- Uses filesystem events (no code injection, no privilege escalation)
+- Respects macOS sandbox restrictions
+- No persistent background processes
+- Safe for App Store distribution
+
+**Data Handling for Prompteka**:
+- MCP server processes user's prompt library data
+- No data stored outside Prompteka's designated folder
+- No copies sent to remote servers
+- Operations logged locally only
+- User retains full control of all data
+
+---
+
+## Concurrency & Limits Policy
+
+### Read-Only Operations
+
+**Single Connection Pattern**:
+- MCP server opens ONE read-only SQLite connection at startup
+- Connection reused for all read operations (list_folders, list_prompts, get_prompt, search_prompts)
+- WAL mode ensures concurrent reads don't block writes by Prompteka app
+- Connection auto-closed on server shutdown
+
+**Concurrency Guarantee**:
+- Multiple simultaneous read tools can run in parallel (MCP platform handles this)
+- No locking, no contention, no serialization needed
+- Safe with Prompteka app's concurrent writes
+
+### Write Operations
+
+**Serialization**: Write operations are logically serialized through the queue:
+1. MCP writes to `{uuid}.json`
+2. Prompteka processes one file at a time (watches queue sequentially)
+3. Response written to `.response-{uuid}.json`
+4. No parallel writes risk database conflicts
+
+**Queue Depth Limit**:
+- If `import-queue/` has 1000+ files, reject with `QUEUE_FULL` error
+- Prevents runaway file accumulation
+
+**Max Parallel Requests** (MCP client level):
+- No hard limit enforced (MCP platform manages)
+- Recommended: max 5 concurrent write tools per session
+- Queuing provides natural backpressure
+
+### Idempotency Guarantees
+
+**Update & Delete Operations**:
+- Same `id` sent twice = only processed once (idempotent)
+- Second identical request returns: "Already updated: {field changes applied}"
+- Safe to retry without side effects
+- Response file reuse: if `.response-{uuid}.json` exists, return it (don't reprocess)
+
+**Delete Idempotency**:
+- Deleting non-existent prompt = success ("Already deleted")
+- No error thrown
+
+---
+
+## Resilience & Orphan Handling
+
+### Server Restart Recovery
+
+**On MCP Server Startup**:
+```
+1. Scan import-queue/ for pending operations
+2. If `.response-{uuid}.json` exists but `.../processed/{uuid}.json` not yet moved:
+   - Operation succeeded, response file still valid → return it
+3. If no response file exists:
+   - Operation may have crashed → delete stale `.{uuid}.tmp` files
+4. Clean up orphaned response files (> 24h old) → log count
+5. Begin normal operation
+```
+
+**Orphaned Operations** (Prompteka crashed before responding):
+- MCP detects timeout (5s) → returns `RESPONSE_TIMEOUT` to client
+- User can retry immediately (idempotent)
+- If retry fails again, user knows there's a problem
+
+**Queue Health Check**:
+- On startup, verify queue directory is writable
+- If not writable, refuse to start (log clear error message)
+
+### Timeout Handling
+
+**Write Operation Timeout** (5 seconds):
+1. MCP writes `{uuid}.json`
+2. Wait for `.response-{uuid}.json` for 5s
+3. If timeout: Retry 1 (wait 1s, then wait 5s again) + Retry 2 (same pattern)
+4. If still no response: Return `RESPONSE_TIMEOUT` error to client
+
+**User Guidance for Timeout**:
+- Check if Prompteka app is running
+- Check queue directory for stuck files
+- Restart Prompteka app and retry
+
+### Orphan File Cleanup
+
+**MCP Cleanup (on startup)**:
+- Delete `.response-{uuid}.json` files > 24 hours old
+- Log: "Cleaned {N} orphaned response files from last session"
+- Frees disk space
+
+**Prompteka Cleanup (daily background)**:
+- Delete `processed/{uuid}.json` > 7 days old
+- Keep `failed/{uuid}.json` indefinitely (user inspection)
+
+---
+
+## Client Response Sizing & Pagination
+
+### Response Size Limits
+
+**list_prompts & search_prompts**:
+- Max 500 items per response (enforced)
+- Typical response size: 500 prompts @ 2KB each = 1MB
+- If prompt content is very large (100KB max), still under limit
+
+**list_folders**:
+- Max 1000 folders per response
+- Typical size: ~100 bytes per folder = 100KB max
+
+**No Truncation Needed**: Responses are always under network limits (1MB << 10MB typical)
+
+### Pagination Defaults
+
+**list_prompts & search_prompts**:
+```json
+{
+  "limit": 100,      // Default (client can request up to 500)
+  "offset": 0        // Start from beginning
+}
+```
+
+**Recommended Client Behavior**:
+- First call: `limit=100, offset=0` (get first 100)
+- Loop: increment `offset` by 100 each call
+- Stop when: `offset >= total` (from response)
+
+**Example**:
+```
+Call 1: list_prompts(limit=100, offset=0)   → 100 items, total=350
+Call 2: list_prompts(limit=100, offset=100) → 100 items
+Call 3: list_prompts(limit=100, offset=200) → 100 items
+Call 4: list_prompts(limit=100, offset=300) → 50 items (last page)
+Done (offset 400 >= total 350)
+```
+
+### Stable Operation IDs
+
+**Queue Operations**:
+- Each write generates UUIDv4 (stable, unique)
+- Client can use operation ID to:
+  - Track retry progress
+  - Correlate with logs
+  - Debug failures
+
+---
+
+## Configuration File Support
+
+### Configuration Methods (Precedence)
+
+1. **Environment Variables** (highest priority)
+   ```bash
+   export PROMPTEKA_DB_PATH="/custom/path/prompts.db"
+   export PROMPTEKA_QUEUE_PATH="/custom/path/import-queue"
+   export LOG_LEVEL="debug"
+   ```
+
+2. **.env File** (project root)
+   ```
+   PROMPTEKA_DB_PATH=/custom/path/prompts.db
+   PROMPTEKA_QUEUE_PATH=/custom/path/import-queue
+   LOG_LEVEL=info
+   ```
+
+3. **Defaults** (lowest priority)
+   ```
+   PROMPTEKA_DB_PATH: ~/Library/Application Support/prompteka/prompts.db
+   PROMPTEKA_QUEUE_PATH: ~/Library/Application Support/prompteka/import-queue
+   LOG_LEVEL: info
+   ```
+
+### Config File Validation
+
+On startup:
+- Read env vars + .env file
+- Validate all paths exist and are readable/writable
+- If invalid: log clear error and exit with code 1
+- Never proceed with invalid config
+
+---
+
+## Detailed Testing Strategy
+
+### Unit Tests
+
+**Contract Tests** (must pass):
+- [ ] Validate all tool input schemas (reject invalid inputs)
+- [ ] Validate all tool output schemas (responses match spec)
+- [ ] Test pagination limits (max 500, reject >500)
+- [ ] Test emoji validation (1-2 chars, reject invalid)
+- [ ] Test color validation (only 6 allowed colors)
+- [ ] Test UUID validation (reject malformed UUIDs)
+
+**Path Validation Tests**:
+- [ ] Reject symlinks in queue path
+- [ ] Reject `../` traversal attempts
+- [ ] Accept only exact `~/Library/Application Support/prompteka` base
+- [ ] Verify 0600 permissions on written files
+
+**Error Cases**:
+- [ ] Folder not found → `FOLDER_NOT_FOUND`
+- [ ] Prompt not found → `PROMPT_NOT_FOUND`
+- [ ] Payload too large → `PAYLOAD_TOO_LARGE`
+- [ ] Invalid color → `INVALID_COLOR`
+
+### Integration Tests
+
+**Queue Operations** (write file → verify response):
+- [ ] create_prompt → response file appears → cleanup
+- [ ] update_prompt → response file appears → idempotent on retry
+- [ ] delete_prompt → response file appears → idempotent (delete non-existent)
+- [ ] create_folder → response file appears → verify folderId in response
+
+**Timeout & Retry** (in temp directory):
+- [ ] Write file, simulate 5s+ delay → timeout, retry, eventually succeed
+- [ ] Verify 3 total attempts (initial + 2 retries)
+- [ ] Verify 1s backoff between retries
+
+**Concurrent Operations**:
+- [ ] Two read tools in parallel (should succeed)
+- [ ] Two write tools in parallel to queue (both succeed, both process)
+
+**SQLite Fixtures**:
+- [ ] Create temporary SQLite db with Prompteka schema
+- [ ] Seed sample folders/prompts
+- [ ] Run read tools against fixture
+- [ ] Verify results match expected
+
+### SQLite Fixture Template
+
+```sql
+CREATE TABLE folders (id TEXT PRIMARY KEY, name TEXT, ...);
+CREATE TABLE prompts (id TEXT PRIMARY KEY, title TEXT, content TEXT, folder_id TEXT, ...);
+
+INSERT INTO folders VALUES ('folder-1', 'Engineering', NULL, '🔧', 'blue', '2025-12-01T10:00:00Z', '2025-12-01T10:00:00Z');
+INSERT INTO prompts VALUES ('prompt-1', 'API Review', 'Content...', 'folder-1', '📋', 'red', NULL, '2025-12-01T10:00:00Z', '2025-12-01T10:00:00Z');
+-- ... more test data
+```
+
+### Logging Tests
+
+- [ ] Verify structured log format (has all required fields)
+- [ ] Verify no PII in logs (check titleLength, not title)
+- [ ] Verify error logs include error code
+- [ ] Verify latency is recorded correctly
+
+---
+
+## Upgrade & Versioning Policy
+
+### Protocol Versioning
+
+**Current**: v1.0
+
+**Backward Compatibility Strategy**:
+- New minor versions (v1.1, v1.2) add tools but keep all v1.0 tools intact
+- Major version (v2.0) only if breaking changes required
+
+**Example**: If adding new `list_prompts_v2` tool:
+- Keep old `list_prompts` tool working
+- New clients use `list_prompts_v2`
+- Old clients continue with `list_prompts`
+- 6-month deprecation warning for v1.0 users
+
+### npm Package Versioning
+
+```
+v1.0.0 - Initial release (4 read tools)
+v1.1.0 - Add write tools (6 additional tools)
+v1.2.0 - Add health check tool
+v2.0.0 - Breaking change (theoretical future)
+```
+
+### Client Version Detection
+
+Clients can check: `prompteka-mcp --version` to verify they have the right MCP tools available.
+
+---
+
+## App Store Review Checklist
+
+### Privacy & Security
+
+- [ ] **Local-Only**: Confirm no network calls in code (grep for http/https)
+- [ ] **No Telemetry**: No analytics, error reporting, or data collection
+- [ ] **Sandboxed**: Only accesses `~/Library/Application Support/prompteka`
+- [ ] **No Tracking**: No user tracking, no device fingerprinting
+- [ ] **Open Source**: Link to GitHub repo in documentation
+
+### Data Handling
+
+- [ ] **No Copies**: User's prompt data never copied outside directory
+- [ ] **No Remote Storage**: No cloud backup or sync (MCP server is local only)
+- [ ] **User Control**: User fully controls all data (can delete at any time)
+- [ ] **Encryption**: No additional encryption needed (uses Prompteka's DB)
+
+### Functionality
+
+- [ ] **No Harmful Content**: Only reads/writes user's own prompts
+- [ ] **No Manipulation**: Cannot modify other users' data
+- [ ] **No Reverse Engineering**: Cannot extract Prompteka proprietary info
+- [ ] **No Performance Degradation**: Queue operations don't slow down Prompteka
+
+### Documentation
+
+- [ ] **Privacy Policy**: Link to prompteka.net/privacy-policy.html
+- [ ] **Clear Purpose**: README explains MCP server is for AI assistants
+- [ ] **Permissions**: Document what the server can/cannot do
+- [ ] **Data Retention**: Explain queue cleanup policies
+
+---
+
 ## References
 
 - MCP Specification: https://modelcontextprotocol.io
@@ -749,6 +1090,6 @@ AI: get_prompt(id)
 
 ---
 
-**Document Version**: 2.0
-**Status**: Ready for Implementation
+**Document Version**: 3.0
+**Status**: Ready for Implementation (All Gaps Addressed)
 **Last Updated**: December 9, 2025
