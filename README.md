@@ -22,69 +22,237 @@ No network calls, no telemetry, no data sent anywhere.
 ✅ **App Store Compliant**
 Works with macOS Prompteka app via safe file-based import queue.
 
-## Quick Start
+## How It Works
 
-### Installation
+### Architecture Overview
+
+The Prompteka MCP Server operates in two modes:
+
+**Read Operations** (Fast, Direct Database Access)
+- Connects directly to your Prompteka SQLite database
+- Uses WAL (Write-Ahead Logging) mode for safe concurrent access
+- Returns results in < 100ms
+- Does NOT interfere with Prompteka app operations
+
+**Write Operations** (Safe, Async Queue)
+- Creates JSON operation files in the Prompteka import queue
+- Prompteka app watches this folder and processes operations
+- Changes appear in Prompteka app within 1-2 seconds
+- Fully validated and atomic
+
+This two-mechanism approach ensures:
+- ✅ No database lock conflicts
+- ✅ App Store sandbox compliance
+- ✅ Real-time UI updates in Prompteka
+- ✅ Safe automatic recovery on crashes
+
+### Database Location
+
+Prompteka stores its data at:
+```
+~/Library/Application Support/prompteka/prompts.db
+```
+
+The MCP server accesses this file to read your prompts and folders.
+
+### Queue Operations
+
+When you use write tools (create_prompt, update_prompt, etc.), here's what happens:
+
+1. MCP server creates a JSON file in:
+   ```
+   ~/Library/Application Support/prompteka/import-queue/{uuid}.json
+   ```
+
+2. Prompteka app detects the file and processes it
+
+3. After validation, Prompteka writes a response:
+   ```
+   ~/Library/Application Support/prompteka/import-queue/.response-{uuid}.json
+   ```
+
+4. MCP server reads the response and returns it to you
+
+5. Response file is automatically cleaned up
+
+This all happens in 200-500ms, completely transparent to you.
+
+---
+
+## Quick Reference: All Tools
+
+| Tool | Type | Description |
+|------|------|-------------|
+| `list_folders` | Read | Get all folders with metadata |
+| `list_prompts` | Read | Get prompts from folder (paginated) |
+| `get_prompt` | Read | Get single prompt by ID |
+| `search_prompts` | Read | Full-text search across prompts |
+| `create_prompt` | Write | Create new prompt in folder |
+| `update_prompt` | Write | Modify existing prompt |
+| `delete_prompt` | Write | Delete prompt (idempotent) |
+| `create_folder` | Write | Create new folder |
+| `update_folder` | Write | Modify folder properties |
+| `delete_folder` | Write | Delete folder with safety checks |
+| `move_prompt` | Write | Move prompt to different folder |
+| `export_prompts` | Write | Export to JSON/CSV/Markdown |
+| `backup_prompts` | Write | Export entire library as ZIP |
+| `restore_prompts` | Write | Import library from backup |
+
+**Response Times:**
+- Read tools: < 100ms (direct database)
+- Write tools: 200-500ms (queued, validated)
+
+**All operations are logged** with detailed status, errors, and timing information.
+
+---
+
+## Installation
+
+### Prerequisites
+
+- **Prompteka app** installed and has been opened at least once
+- **Node.js** 18.0.0 or newer
+- **npm** 9.0.0 or newer
+
+Check your versions:
+```bash
+node --version   # Should be 18.0.0 or higher
+npm --version    # Should be 9.0.0 or higher
+```
+
+### Step 1: Install Prompteka MCP Server
+
+**Option A: From npm (once published)**
 
 ```bash
 npm install -g prompteka-mcp
 ```
 
-Or install from source:
+**Option B: From source (development)**
 
 ```bash
+# Clone the repository
 git clone https://github.com/webdevguyrg/prompteka-mcp.git
 cd prompteka-mcp
+
+# Install dependencies
 npm install
+
+# Build TypeScript to JavaScript
 npm run build
+
+# Install globally on your system
 npm install -g .
+
+# Verify installation
+prompteka-mcp --version
 ```
 
-### Configuration in MCP Clients
+### Step 2: Configure Your MCP Client
 
-Different MCP-compatible tools have different configuration methods.
+The MCP server is now installed. Next, configure your MCP-compatible AI tool to use it.
 
-**For desktop/CLI applications:**
+**For MCP Desktop/CLI Tools:**
 
-Edit your MCP client configuration (typically at `~/.config/mcp/config.json` or equivalent):
+Locate your MCP configuration file:
+- Common locations: `~/.config/mcp/config.json` or `~/.mcp/config.json`
+- Tool-specific: Check your tool's documentation
+
+Add this configuration:
 
 ```json
 {
   "mcpServers": {
     "prompteka": {
       "command": "prompteka-mcp",
-      "args": []
+      "args": [],
+      "env": {
+        "LOG_LEVEL": "info"
+      }
     }
   }
 }
 ```
 
-Restart your MCP client. The Prompteka MCP tools will be available.
+Then restart your MCP client.
 
-**For web-based applications:**
+### Step 3: Verify Installation
 
-Refer to your MCP client's documentation for adding custom MCP servers.
+Test the connection:
 
-### Configuration with Environment Variables
+```bash
+# MCP client should now show Prompteka tools available
+# Try running: list_folders
+# Should return your Prompteka folders without errors
+```
 
-Override default paths:
+---
+
+## Advanced Configuration
+
+### Custom Database Path
+
+If Prompteka is installed in a non-standard location:
 
 ```bash
 export PROMPTEKA_DB_PATH="/custom/path/prompts.db"
-export PROMPTEKA_QUEUE_PATH="/custom/path/import-queue"
-export LOG_LEVEL="debug"  # or info, warn, error
-
 prompteka-mcp
 ```
 
-Or create `.env` file in project root:
+Or in your MCP config:
 
-```
-PROMPTEKA_DB_PATH=/custom/path/prompts.db
-LOG_LEVEL=info
+```json
+{
+  "mcpServers": {
+    "prompteka": {
+      "command": "prompteka-mcp",
+      "env": {
+        "PROMPTEKA_DB_PATH": "/custom/path/prompts.db"
+      }
+    }
+  }
+}
 ```
 
-## Available Tools
+### Custom Queue Path
+
+If you need a different import queue location:
+
+```json
+{
+  "mcpServers": {
+    "prompteka": {
+      "command": "prompteka-mcp",
+      "env": {
+        "PROMPTEKA_QUEUE_PATH": "/custom/path/import-queue"
+      }
+    }
+  }
+}
+```
+
+### Logging Level
+
+Control verbosity:
+
+```json
+{
+  "mcpServers": {
+    "prompteka": {
+      "command": "prompteka-mcp",
+      "env": {
+        "LOG_LEVEL": "debug"  # or: info, warn, error
+      }
+    }
+  }
+}
+```
+
+Log output appears in your MCP tool's console.
+
+---
+
+## Available Tools (14 Total)
 
 ### Read-Only Tools (Immediate)
 
@@ -120,7 +288,21 @@ Rename or reorganize a folder.
 **`delete_folder`**
 Delete a folder (with safety checks to prevent accidental data loss).
 
-### Backup & Restore Tools
+### Organization & Export Tools
+
+**`move_prompt`**
+Move a prompt to a different folder.
+- Move single prompt to new folder
+- Target can be any folder (or null for root)
+- Updates folder references automatically
+
+**`export_prompts`**
+Export prompts to various formats.
+- Formats: JSON (full data), CSV (tabular), Markdown (formatted)
+- Optional: Export entire library or just one folder
+- Includes metadata and folder structure
+
+### Data Management & Backup Tools
 
 **`backup_prompts`**
 Export your entire prompt library as a ZIP file.

@@ -716,6 +716,198 @@ export async function handleBackupPrompts(
 }
 
 /**
+ * Move prompt tool
+ */
+export function createMovePromptTool(): Tool {
+  return {
+    name: "move_prompt",
+    description: "Move a prompt to a different folder",
+    inputSchema: {
+      type: "object",
+      properties: {
+        promptId: {
+          type: "string",
+          pattern: "^[a-f0-9-]{36}$",
+          description: "Prompt ID to move",
+        },
+        targetFolderId: {
+          type: ["string", "null"],
+          description: "Target folder ID (null = root folder)",
+        },
+      },
+      required: ["promptId", "targetFolderId"],
+      additionalProperties: false,
+    },
+  };
+}
+
+export async function handleMovePrompt(
+  input: unknown
+): Promise<TextContent | ErrorContent> {
+  const logger = getLogger();
+  const timer = logger.startTimer();
+
+  try {
+    if (typeof input !== "object" || input === null) {
+      throw new PromptekaMCPError(ErrorCodes.INVALID_INPUT, "Input must be an object");
+    }
+
+    const obj = input as Record<string, unknown>;
+    const promptId = validateUUID(obj.promptId);
+    const targetFolderId = obj.targetFolderId; // Can be null for root
+
+    const queue = getQueueWriter();
+    const result = await queue.write("move_prompt", {
+      promptId,
+      targetFolderId,
+    });
+
+    logger.logSuccess("move_prompt", timer(), {
+      promptId,
+      targetFolderId,
+      status: result.status,
+    });
+
+    return {
+      type: "text",
+      text: JSON.stringify(result, null, 2),
+    };
+  } catch (error) {
+    const duration = timer();
+
+    if (error instanceof PromptekaMCPError) {
+      const details = getErrorDetails(error.code);
+      logger.logError("move_prompt", error.code, duration, error.message);
+
+      return {
+        type: "text",
+        text: JSON.stringify({
+          status: "error",
+          error: error.code,
+          message: details.userFacingMessage,
+        }),
+      };
+    }
+
+    const message = error instanceof Error ? error.message : "Unknown error";
+    logger.logError("move_prompt", ErrorCodes.INTERNAL_ERROR, duration, message);
+
+    return {
+      type: "text",
+      text: JSON.stringify({
+        status: "error",
+        error: ErrorCodes.INTERNAL_ERROR,
+        message: "Failed to move prompt",
+      }),
+    };
+  }
+}
+
+/**
+ * Export prompts tool
+ */
+export function createExportPromptsTool(): Tool {
+  return {
+    name: "export_prompts",
+    description: "Export prompts to various formats (JSON, CSV, Markdown)",
+    inputSchema: {
+      type: "object",
+      properties: {
+        format: {
+          type: "string",
+          enum: ["json", "csv", "markdown"],
+          default: "json",
+          description: "Export format",
+        },
+        folderId: {
+          type: ["string", "null"],
+          description: "Export only from specific folder (optional)",
+        },
+        includeMetadata: {
+          type: "boolean",
+          default: true,
+          description: "Include folder structure and metadata",
+        },
+      },
+      additionalProperties: false,
+    },
+  };
+}
+
+export async function handleExportPrompts(
+  input: unknown
+): Promise<TextContent | ErrorContent> {
+  const logger = getLogger();
+  const timer = logger.startTimer();
+
+  try {
+    if (typeof input !== "object" || input === null) {
+      throw new PromptekaMCPError(ErrorCodes.INVALID_INPUT, "Input must be an object");
+    }
+
+    const obj = input as Record<string, unknown>;
+    const format = (obj.format as string) || "json";
+    const folderId = obj.folderId;
+    const includeMetadata = validateBooleanOrNull(obj.includeMetadata, true);
+
+    // Validate format
+    if (!["json", "csv", "markdown"].includes(format)) {
+      throw new PromptekaMCPError(
+        ErrorCodes.INVALID_INPUT,
+        "Format must be: json, csv, or markdown"
+      );
+    }
+
+    const queue = getQueueWriter();
+    const result = await queue.write("export_prompts", {
+      format,
+      folderId,
+      includeMetadata,
+    });
+
+    logger.logSuccess("export_prompts", timer(), {
+      format,
+      hasFolderFilter: folderId !== null && folderId !== undefined,
+      includeMetadata,
+      status: result.status,
+    });
+
+    return {
+      type: "text",
+      text: JSON.stringify(result, null, 2),
+    };
+  } catch (error) {
+    const duration = timer();
+
+    if (error instanceof PromptekaMCPError) {
+      const details = getErrorDetails(error.code);
+      logger.logError("export_prompts", error.code, duration, error.message);
+
+      return {
+        type: "text",
+        text: JSON.stringify({
+          status: "error",
+          error: error.code,
+          message: details.userFacingMessage,
+        }),
+      };
+    }
+
+    const message = error instanceof Error ? error.message : "Unknown error";
+    logger.logError("export_prompts", ErrorCodes.INTERNAL_ERROR, duration, message);
+
+    return {
+      type: "text",
+      text: JSON.stringify({
+        status: "error",
+        error: ErrorCodes.INTERNAL_ERROR,
+        message: "Failed to export prompts",
+      }),
+    };
+  }
+}
+
+/**
  * Restore prompts tool
  */
 export function createRestorePromptsTool(): Tool {

@@ -10,14 +10,16 @@
 
 An MCP (Model Context Protocol) server providing AI assistants with full access to Prompteka's prompt library via two mechanisms:
 - **Reads** (4 tools): Direct SQLite database access (fast, < 100ms)
-- **Writes** (8 tools): File-based import queue (safe, async, Prompteka-validated)
+- **Writes** (10 tools): File-based import queue (safe, async, Prompteka-validated)
 
-**12 Total Tools**:
+**14 Total Tools**:
 - **Read-Only**: list_folders, list_prompts, get_prompt, search_prompts
 - **Write Operations**: create_prompt, update_prompt, delete_prompt, create_folder, update_folder, delete_folder
+- **Organization**: move_prompt
+- **Export**: export_prompts (JSON, CSV, Markdown)
 - **Data Management**: backup_prompts, restore_prompts
 
-Enables: "Save this prompt to my Security folder", "List all prompts about testing", "Update the color of my API design prompt", "Export my entire library as backup".
+Enables: "Save this prompt to my Security folder", "Move all testing prompts to QA folder", "Export my prompts as CSV", "Export entire library as backup".
 
 ## Architecture
 
@@ -691,19 +693,25 @@ Prompteka app handles schema upgrades.
 - [ ] npm package published
 - [ ] Documentation complete
 
-### Phase 2: Full CRUD + Backup
+### Phase 2: Full CRUD + Organization
 - [ ] Queue writer working
 - [ ] Write tools: create/update/delete for prompts + folders (6 tools)
-- [ ] Backup/restore tools (2 tools)
+- [ ] Organization tools: move_prompt, export_prompts (2 tools)
 - [ ] Response file handling
 - [ ] Retry/cleanup policy
 - [ ] Error handling complete
 - [ ] End-to-end testing
 - [ ] npm package updated
 
-### Phase 3: Production Rollout
+### Phase 3: Data Management & Backup
+- [ ] Backup/restore tools (2 tools)
+- [ ] ZIP compression integration
+- [ ] Atomic restore with rollback
+- [ ] Integration testing
+
+### Phase 4: Production Rollout
 - [ ] Security review complete
-- [ ] All 12 tools tested extensively
+- [ ] All 14 tools tested extensively
 - [ ] Performance benchmarks verified
 - [ ] User documentation published
 - [ ] Support procedures established
@@ -713,7 +721,8 @@ Prompteka app handles schema upgrades.
 - Monitor error rates and types
 - Check response time latencies
 - Validate queue health
-- Monitor backup/restore operations
+- Monitor backup/restore/export operations
+- Track file export statistics
 
 ---
 
@@ -751,6 +760,80 @@ AI: get_prompt(id)
     → create_prompt(title="API Review (REST)", content=modified, folderId=same)
 → New prompt in Prompteka
 ```
+
+##### `move_prompt`
+
+**Input Schema**:
+```json
+{
+  "type": "object",
+  "properties": {
+    "promptId": { "type": "string", "pattern": "^[a-f0-9\\-]{36}$" },
+    "targetFolderId": { "type": ["string", "null"], "pattern": "^[a-f0-9\\-]{36}$|^null$" }
+  },
+  "required": ["promptId", "targetFolderId"],
+  "additionalProperties": false
+}
+```
+
+**Response**:
+```json
+{
+  "status": "success",
+  "message": "Prompt moved to target folder",
+  "data": {
+    "promptId": "...",
+    "targetFolderId": "...",
+    "previousFolderId": "..."
+  }
+}
+```
+
+**Timeout**: 5 seconds
+**Behavior**: Move prompt to specified folder (null = root folder)
+**Errors**: `PROMPT_NOT_FOUND`, `FOLDER_NOT_FOUND`, `DATABASE_ERROR`
+
+---
+
+##### `export_prompts`
+
+**Input Schema**:
+```json
+{
+  "type": "object",
+  "properties": {
+    "format": { "type": "string", "enum": ["json", "csv", "markdown"], "default": "json" },
+    "folderId": { "type": ["string", "null"] },
+    "includeMetadata": { "type": "boolean", "default": true }
+  },
+  "additionalProperties": false
+}
+```
+
+**Response**:
+```json
+{
+  "status": "success",
+  "message": "Exported 25 prompts",
+  "data": {
+    "format": "json",
+    "filename": "prompts-export-2025-12-09.json",
+    "path": "~/Downloads/",
+    "promptCount": 25,
+    "sizeBytes": 102400
+  }
+}
+```
+
+**Timeout**: 8 seconds (conversion + write)
+**Formats**:
+- `json` - Full prompt objects with all metadata
+- `csv` - Tabular format (title, content, folder, emoji, color, url)
+- `markdown` - Markdown file with folder structure and prompts
+
+**Errors**: `DATABASE_ERROR`, `INVALID_INPUT`, `PERMISSION_DENIED`
+
+---
 
 ##### `backup_prompts`
 
