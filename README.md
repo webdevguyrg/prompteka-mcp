@@ -2,7 +2,7 @@
 
 **Model Context Protocol server for Prompteka** - enables AI assistants to read and write your prompt library.
 
-Connect any MCP-compatible AI tool (Claude, Claude Code, Claude Desktop) to access and manage your Prompteka prompts programmatically.
+Connect any MCP-compatible AI assistant to access and manage your Prompteka prompts programmatically.
 
 ## Features
 
@@ -40,9 +40,13 @@ npm run build
 npm install -g .
 ```
 
-### Configuration in Claude Desktop
+### Configuration in MCP Clients
 
-Edit `~/Library/Application Support/Claude/claude_desktop_config.json`:
+Different MCP-compatible tools have different configuration methods.
+
+**For desktop/CLI applications:**
+
+Edit your MCP client configuration (typically at `~/.config/mcp/config.json` or equivalent):
 
 ```json
 {
@@ -55,16 +59,11 @@ Edit `~/Library/Application Support/Claude/claude_desktop_config.json`:
 }
 ```
 
-Restart Claude Desktop. The Prompteka MCP tools will be available.
+Restart your MCP client. The Prompteka MCP tools will be available.
 
-### Configuration in Claude Code
+**For web-based applications:**
 
-Prompteka MCP is configured as an MCP server. Add to your Claude Code workspace:
-
-```bash
-# In Claude Code settings
-claude code install prompteka-mcp
-```
+Refer to your MCP client's documentation for adding custom MCP servers.
 
 ### Configuration with Environment Variables
 
@@ -92,91 +91,48 @@ LOG_LEVEL=info
 **`list_folders`**
 Get all your folders with hierarchy and metadata.
 
-```
-User: "How many folders do I have?"
-AI: list_folders() → [Engineering, Security, Testing, ...]
-```
-
 **`list_prompts`**
 Get prompts from a specific folder with pagination.
-
-```
-User: "Show me all prompts in my Engineering folder"
-AI: list_prompts(folderId: "...", limit: 100)
-```
 
 **`get_prompt`**
 Get full details of a single prompt by ID.
 
-```
-User: "Show me my API review prompt"
-AI: get_prompt(id: "...")
-```
-
 **`search_prompts`**
 Full-text search across all prompt titles and content.
-
-```
-User: "Find all my security-related prompts"
-AI: search_prompts(query: "security") → [3 matching prompts]
-```
 
 ### Write Tools (Async, Via Queue)
 
 **`create_prompt`**
-Create a new prompt in a folder.
-
-```
-User: "Save this as a new prompt in my Engineering folder"
-AI: create_prompt(
-  title: "API Request Validation",
-  content: "...",
-  folderId: "...",
-  emoji: "📋",
-  color: "blue"
-)
-→ Prompt appears in Prompteka within 1 second
-```
+Create a new prompt in a folder with emoji, color, and optional URL.
 
 **`update_prompt`**
-Modify an existing prompt.
-
-```
-User: "Change the color of my API review to red"
-AI: update_prompt(id: "...", color: "red")
-```
+Modify an existing prompt (title, content, folder, emoji, color, URL).
 
 **`delete_prompt`**
 Delete a prompt.
 
-```
-User: "Delete the old version of my prompt"
-AI: delete_prompt(id: "...")
-```
-
 **`create_folder`**
-Create a new folder.
-
-```
-User: "Create a folder called 'Experiments'"
-AI: create_folder(name: "Experiments", emoji: "🧪", color: "purple")
-```
+Create a new folder with optional emoji and color.
 
 **`update_folder`**
 Rename or reorganize a folder.
 
-```
-User: "Rename my QA folder to Testing"
-AI: update_folder(id: "...", name: "Testing")
-```
-
 **`delete_folder`**
-Delete a folder (with safety checks).
+Delete a folder (with safety checks to prevent accidental data loss).
 
-```
-User: "Delete my empty archive folder"
-AI: delete_folder(id: "...")
-```
+### Backup & Restore Tools
+
+**`backup_prompts`**
+Export your entire prompt library as a ZIP file.
+- Includes all prompts, folders, and metadata
+- Compressed for easy backup/sharing
+- Can be used to migrate between systems
+
+**`restore_prompts`**
+Import a previously exported prompt library from a backup file.
+- Merges with existing library (doesn't overwrite by default)
+- Option to overwrite conflicting prompts
+- Full validation before import
 
 ## Response Times
 
@@ -187,31 +143,27 @@ AI: delete_folder(id: "...")
 
 ### UC1: Capture Prompts Quickly
 
-```
-User: "Save this prompt to my Engineering folder"
-AI: Creates prompt, you see it in Prompteka immediately
-```
+An MCP client can automatically save generated prompts directly to your Prompteka library without manual copy-paste.
 
 ### UC2: Organize Your Library
 
-```
-User: "Move all my testing prompts to the QA folder"
-AI: Searches for testing prompts, moves them one by one
-```
+MCP clients can help organize and reorganize your prompt library, move prompts between folders, and apply consistent tagging.
 
 ### UC3: Audit Your Prompts
 
-```
-User: "How many prompts do I have by color?"
-AI: Lists all folders → lists prompts in each → counts by color
-```
+Analyze your prompt library - count prompts by color, folder, age; identify unused prompts; find duplicates.
 
 ### UC4: Clone & Customize
 
-```
-User: "Make a REST API version of my API review prompt"
-AI: Gets original, creates new one with modified content
-```
+Create variations of existing prompts with MCP integration - modify content, category, metadata in one operation.
+
+### UC5: Backup & Migrate
+
+Export your entire library for backup purposes or migrate between systems/devices.
+
+### UC6: Batch Operations
+
+Perform bulk changes - update colors, reorganize folders, or apply metadata to multiple prompts at once.
 
 ## Security & Privacy
 
@@ -345,7 +297,7 @@ The MCP server uses a **read-direct, write-queue** pattern:
 
 ```
 ┌─────────┐
-│   AI    │ (Claude, Claude Code, etc.)
+│   AI    │ (MCP-compatible assistant)
 └────┬────┘
      │ MCP Protocol
      ▼

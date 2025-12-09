@@ -3,17 +3,21 @@
 **Status**: MVP Phase (Read-Only → Queued Writes)
 **Updated**: December 9, 2025
 **Protocol Version**: 1.0
-**Codex Review**: All gaps addressed (v2 → v3)
 
 ---
 
 ## Overview
 
-An MCP (Model Context Protocol) server providing AI assistants with full CRUD access to Prompteka's prompt library via two mechanisms:
-- **Reads**: Direct SQLite database access (fast, < 100ms)
-- **Writes**: File-based import queue (safe, async, Prompteka-validated)
+An MCP (Model Context Protocol) server providing AI assistants with full access to Prompteka's prompt library via two mechanisms:
+- **Reads** (4 tools): Direct SQLite database access (fast, < 100ms)
+- **Writes** (8 tools): File-based import queue (safe, async, Prompteka-validated)
 
-Enables: "Save this prompt to my Security folder", "List all prompts about testing", "Update the color of my API design prompt".
+**12 Total Tools**:
+- **Read-Only**: list_folders, list_prompts, get_prompt, search_prompts
+- **Write Operations**: create_prompt, update_prompt, delete_prompt, create_folder, update_folder, delete_folder
+- **Data Management**: backup_prompts, restore_prompts
+
+Enables: "Save this prompt to my Security folder", "List all prompts about testing", "Update the color of my API design prompt", "Export my entire library as backup".
 
 ## Architecture
 
@@ -680,27 +684,36 @@ Prompteka app handles schema upgrades.
 
 ## Deployment & Rollout
 
-### Phase 1: Read-Only MVP (Week 1)
+### Phase 1: Read-Only MVP
 - [ ] Database reader working
-- [ ] Read-only tools: list_folders, list_prompts, get_prompt, search_prompts
+- [ ] Read-only tools: list_folders, list_prompts, get_prompt, search_prompts (4 tools)
 - [ ] Structured logging
 - [ ] npm package published
 - [ ] Documentation complete
 
-### Phase 2: Full CRUD (Week 2)
+### Phase 2: Full CRUD + Backup
 - [ ] Queue writer working
-- [ ] Write tools: all 6 (create/update/delete for prompts + folders)
+- [ ] Write tools: create/update/delete for prompts + folders (6 tools)
+- [ ] Backup/restore tools (2 tools)
 - [ ] Response file handling
 - [ ] Retry/cleanup policy
 - [ ] Error handling complete
 - [ ] End-to-end testing
 - [ ] npm package updated
 
+### Phase 3: Production Rollout
+- [ ] Security review complete
+- [ ] All 12 tools tested extensively
+- [ ] Performance benchmarks verified
+- [ ] User documentation published
+- [ ] Support procedures established
+
 ### Post-Launch Monitoring
-- Track operation counts by type
+- Track operation counts by tool type
 - Monitor error rates and types
 - Check response time latencies
 - Validate queue health
+- Monitor backup/restore operations
 
 ---
 
@@ -739,6 +752,80 @@ AI: get_prompt(id)
 → New prompt in Prompteka
 ```
 
+##### `backup_prompts`
+
+**Input Schema**:
+```json
+{
+  "type": "object",
+  "properties": {
+    "includeMetadata": { "type": "boolean", "default": true }
+  },
+  "additionalProperties": false
+}
+```
+
+**Response**:
+```json
+{
+  "status": "success",
+  "id": "backup-uuid",
+  "message": "Backup created at ~/Downloads/prompteka-backup-2025-12-09.zip",
+  "data": {
+    "filename": "prompteka-backup-2025-12-09.zip",
+    "path": "~/Downloads/",
+    "folderCount": 8,
+    "promptCount": 127,
+    "sizeBytes": 524288
+  }
+}
+```
+
+**Timeout**: 10 seconds (may include compression)
+**Output**: ZIP file with all prompts, folders, and metadata
+**Includes**: JSON export + folder structure + manifest
+**Errors**: `DATABASE_ERROR`, `PERMISSION_DENIED`, `INTERNAL_ERROR`
+
+---
+
+##### `restore_prompts`
+
+**Input Schema**:
+```json
+{
+  "type": "object",
+  "properties": {
+    "backupPath": { "type": "string", "minLength": 1, "maxLength": 1024 },
+    "overwrite": { "type": "boolean", "default": false }
+  },
+  "required": ["backupPath"],
+  "additionalProperties": false
+}
+```
+
+**Response**:
+```json
+{
+  "status": "success",
+  "message": "Restored 8 folders and 127 prompts from backup",
+  "data": {
+    "foldersCreated": 8,
+    "promptsCreated": 127,
+    "promptsSkipped": 0,
+    "promptsOverwritten": 0
+  }
+}
+```
+
+**Timeout**: 15 seconds (may include validation + import)
+**Behavior**:
+- If `overwrite=false`: Skip prompts with matching ID (merge mode)
+- If `overwrite=true`: Replace existing prompts with same ID
+- Folders created/updated as needed
+- Atomic operation (rollback on error)
+
+**Errors**: `DATABASE_ERROR`, `INVALID_INPUT`, `PERMISSION_DENIED`, `INTERNAL_ERROR`
+
 ---
 
 ## Local-Only & App Store Compliance
@@ -753,7 +840,7 @@ AI: get_prompt(id)
 - ✅ Operates entirely within `~/Library/Application Support/prompteka/`
 
 **App Store Compliance**:
-- Runs only when explicitly invoked by Claude or AI assistant
+- Runs only when explicitly invoked by an MCP-compatible AI assistant
 - Accesses ONLY Prompteka data directory
 - Uses filesystem events (no code injection, no privilege escalation)
 - Respects macOS sandbox restrictions
