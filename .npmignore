@@ -1,0 +1,38 @@
+# Source files (only ship compiled JavaScript)
+src/
+*.ts
+
+# Testing
+tests/
+coverage/
+.vitest/
+*.test.ts
+
+# Development
+.env
+.env.local
+.env.*.local
+.vscode/
+.idea/
+.DS_Store
+
+# Build artifacts
+node_modules/
+tsconfig.json
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Git
+.git/
+.gitignore
+.github/
+
+# CI/CD
+.github/workflows/
+
+# Misc
+.eslintrc
+.eslintignore
+CONTRIBUTING.md
+.editorconfig

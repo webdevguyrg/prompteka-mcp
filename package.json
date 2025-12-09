@@ -8,8 +8,14 @@
     ".": "./dist/server.js"
   },
   "bin": {
-    "prompteka-mcp": "./dist/server.js"
+    "prompteka-mcp": "dist/server.js"
   },
+  "files": [
+    "dist/",
+    "README.md",
+    "LICENSE",
+    "documentation/"
+  ],
   "scripts": {
     "build": "tsc",
     "dev": "node --loader ts-node/esm --no-warnings=ExperimentalWarning src/server.ts",
