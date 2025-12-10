@@ -261,6 +261,25 @@ export class PromptekaDatabaseAccessor {
   }
 
   /**
+   * Checkpoint the WAL to ensure writes are visible to other connections
+   * Uses PASSIVE mode for non-blocking, best-effort checkpoint
+   *
+   * WAL Safety: When MCP writes data, changes go to the WAL file first. This checkpoint
+   * merges those changes into the main database file, ensuring the Prompteka app sees
+   * the updates immediately without requiring a restart.
+   */
+  private checkpoint(): void {
+    if (!this.db || !this.isOpen) return;
+    try {
+      this.db.pragma("wal_checkpoint(PASSIVE)");
+    } catch (error) {
+      // Log but don't throw - checkpoint is best-effort, write succeeded
+      const message = error instanceof Error ? error.message : "Unknown error";
+      getLogger().logDebug("database-accessor", "WAL checkpoint failed", { error: message });
+    }
+  }
+
+  /**
    * Check if a folder exists
    */
   private folderExists(folderId: UUID): boolean {
@@ -753,7 +772,7 @@ export class PromptekaDatabaseAccessor {
       );
     }
 
-    return this.executeWithRetry(() => {
+    const id = this.executeWithRetry(() => {
       const transaction = this.db!.transaction(() => {
         const id = uuidv4() as UUID;
 
@@ -791,6 +810,9 @@ export class PromptekaDatabaseAccessor {
       });
       return transaction();
     }, "create prompt");
+
+    this.checkpoint(); // Ensure write is visible to other connections
+    return id;
   }
 
   /**
@@ -886,6 +908,8 @@ export class PromptekaDatabaseAccessor {
       });
       return transaction();
     }, "update prompt");
+
+    this.checkpoint(); // Ensure write is visible to other connections
   }
 
   /**
@@ -918,6 +942,8 @@ export class PromptekaDatabaseAccessor {
       });
       return transaction();
     }, "delete prompt");
+
+    this.checkpoint(); // Ensure write is visible to other connections
   }
 
   /**
@@ -949,7 +975,7 @@ export class PromptekaDatabaseAccessor {
       );
     }
 
-    return this.executeWithRetry(() => {
+    const id = this.executeWithRetry(() => {
       const transaction = this.db!.transaction(() => {
         const id = uuidv4() as UUID;
         const now = Math.floor(Date.now() / 1000); // Unix seconds
@@ -988,6 +1014,9 @@ export class PromptekaDatabaseAccessor {
       });
       return transaction();
     }, "create folder");
+
+    this.checkpoint(); // Ensure write is visible to other connections
+    return id;
   }
 
   /**
@@ -1093,6 +1122,8 @@ export class PromptekaDatabaseAccessor {
       });
       return transaction();
     }, "update folder");
+
+    this.checkpoint(); // Ensure write is visible to other connections
   }
 
   /**
@@ -1154,6 +1185,8 @@ export class PromptekaDatabaseAccessor {
       });
       return transaction();
     }, "delete folder");
+
+    this.checkpoint(); // Ensure write is visible to other connections
   }
 
   /**
@@ -1204,6 +1237,8 @@ export class PromptekaDatabaseAccessor {
       });
       return transaction();
     }, "move prompt");
+
+    this.checkpoint(); // Ensure write is visible to other connections
   }
 
   /**
@@ -1373,6 +1408,8 @@ export class PromptekaDatabaseAccessor {
 
       return transaction();
     }, "restore backup");
+
+    this.checkpoint(); // Ensure write is visible to other connections
   }
 
   /**
