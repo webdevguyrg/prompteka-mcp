@@ -20,6 +20,13 @@ import { PromptekaMCPError, ErrorCodes } from "../validation/error-taxonomy.js";
 import { getLogger } from "../observability/logger.js";
 
 /**
+ * Expected Prompteka database schema version.
+ * If the database schema differs from this, writes are blocked to prevent data corruption.
+ * Update this only after verifying schema changes with Prompteka app.
+ */
+const PROMPTEKA_SCHEMA_VERSION = 27; // Current Prompteka schema version
+
+/**
  * Validates that a path is safe (no symlinks, no traversal)
  */
 function validatePath(filePath: string): void {
@@ -108,9 +115,21 @@ export class PromptekaDatabaseReader {
       // This doesn't fail if WAL isn't enabled, just confirms readiness
       this.db.pragma("journal_mode = WAL");
 
+      // Verify database schema version matches expectations
+      const schemaVersion = this.db.pragma("schema_version");
+      if (schemaVersion !== PROMPTEKA_SCHEMA_VERSION) {
+        this.db.close();
+        throw new PromptekaMCPError(
+          ErrorCodes.DATABASE_ERROR,
+          `Database schema mismatch: expected version ${PROMPTEKA_SCHEMA_VERSION}, got ${schemaVersion}. ` +
+            `This may indicate an incompatible Prompteka version. Please verify Prompteka is up to date.`
+        );
+      }
+
       this.isOpen = true;
       getLogger().logDebug("database-reader", "Connected to database", {
         dbPath: this.dbPath,
+        schemaVersion,
       });
     } catch (error) {
       const message =
