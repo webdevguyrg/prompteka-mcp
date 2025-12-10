@@ -471,3 +471,63 @@ export async function handleSearchPrompts(input: unknown): Promise<TextContent> 
     };
   }
 }
+
+/**
+ * Health check tool - verifies MCP server and database are operational
+ */
+export function createHealthCheckTool(): Tool {
+  return {
+    name: "health_check",
+    description: "Verify MCP server and database connectivity. Returns operational status.",
+    inputSchema: {
+      type: "object",
+      properties: {},
+      additionalProperties: false,
+    },
+  };
+}
+
+export async function handleHealthCheck(): Promise<TextContent> {
+  const logger = getLogger();
+  const timer = logger.startTimer();
+
+  try {
+    const db = getDatabaseReader();
+    const isHealthy = await db.healthCheck();
+
+    if (!isHealthy) {
+      return {
+        type: "text",
+        text: JSON.stringify({
+          status: "unhealthy",
+          message: "Database health check failed",
+        }, null, 2),
+      };
+    }
+
+    logger.logSuccess("health_check", timer(), {});
+
+    return {
+      type: "text",
+      text: JSON.stringify({
+        status: "healthy",
+        message: "MCP server and database operational",
+        timestamp: new Date().toISOString(),
+        tools: 12,
+      }, null, 2),
+    };
+  } catch (error) {
+    const duration = timer();
+    const message = error instanceof Error ? error.message : "Unknown error";
+    logger.logError("health_check", ErrorCodes.INTERNAL_ERROR, duration, message);
+
+    return {
+      type: "text",
+      text: JSON.stringify({
+        status: "unhealthy",
+        error: ErrorCodes.INTERNAL_ERROR,
+        message: "Health check failed: " + message,
+      }, null, 2),
+    };
+  }
+}

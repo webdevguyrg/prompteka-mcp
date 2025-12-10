@@ -2,13 +2,14 @@
  * MCP Tools Index
  *
  * Exports all tools (read-only and write) for registration with the MCP server.
- * 11 total tools: 4 read-only + 7 write
+ * 12 total tools: 5 read-only + 7 write
  *
- * Read-Only (4):
+ * Read-Only (5):
  * - list_folders: Get all folders
  * - list_prompts: Get prompts from folder with pagination
  * - get_prompt: Get single prompt by ID
  * - search_prompts: Full-text search
+ * - health_check: Verify MCP server and database operational
  *
  * Write Operations (7):
  * - create_prompt: Create new prompt
@@ -35,6 +36,8 @@ export {
   handleGetPrompt,
   createSearchPromptsTool,
   handleSearchPrompts,
+  createHealthCheckTool,
+  handleHealthCheck,
 } from "./read-tools.js";
 
 // Write tools

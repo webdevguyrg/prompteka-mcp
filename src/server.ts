@@ -25,6 +25,8 @@ import {
   handleGetPrompt,
   createSearchPromptsTool,
   handleSearchPrompts,
+  createHealthCheckTool,
+  handleHealthCheck,
   createCreatePromptTool,
   handleCreatePrompt,
   createUpdatePromptTool,
@@ -80,6 +82,13 @@ const tools: Map<string, ToolHandler> = new Map([
     {
       tool: createSearchPromptsTool(),
       handler: handleSearchPrompts,
+    },
+  ],
+  [
+    "health_check",
+    {
+      tool: createHealthCheckTool(),
+      handler: handleHealthCheck,
     },
   ],
   // Write tools
