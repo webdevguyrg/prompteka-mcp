@@ -22,9 +22,10 @@ import { getLogger } from "../observability/logger.js";
 /**
  * Expected Prompteka database schema version.
  * If the database schema differs from this, writes are blocked to prevent data corruption.
- * Update this only after verifying schema changes with Prompteka app.
+ * CRITICAL: This must match the actual Prompteka database schema version.
+ * Verify with: sqlite3 ~/Library/Application\ Support/prompteka/prompts.db "PRAGMA schema_version;"
  */
-const PROMPTEKA_SCHEMA_VERSION = 27; // Current Prompteka schema version
+const PROMPTEKA_SCHEMA_VERSION = 10; // Current Prompteka schema version
 
 /**
  * Validates that a path is safe (no symlinks, no traversal)
