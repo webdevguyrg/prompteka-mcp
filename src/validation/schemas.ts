@@ -167,12 +167,6 @@ export const Schemas = {
     properties: {
       name: { type: "string", minLength: 1, maxLength: 255 },
       parentId: { type: ["string", "null"], default: null },
-      emoji: { type: ["string", "null"], maxLength: 2, default: null },
-      color: {
-        type: ["string", "null"],
-        enum: [...COLORS, null],
-        default: null,
-      },
     },
     required: ["name"],
     additionalProperties: false,
@@ -184,8 +178,6 @@ export const Schemas = {
       id: { type: "string", pattern: UUID_PATTERN },
       name: { type: ["string", "null"], minLength: 1, maxLength: 255 },
       parentId: { type: ["string", "null"] },
-      emoji: { type: ["string", "null"], maxLength: 2 },
-      color: { type: ["string", "null"], enum: [...COLORS, null] },
     },
     required: ["id"],
     additionalProperties: false,

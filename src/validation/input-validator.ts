@@ -268,12 +268,13 @@ export function validateBooleanOrNull(
 
 /**
  * Validate folder inputs
+ *
+ * Note: Folders do NOT support emoji or color in Prompteka.
+ * Only the folder name and parentId can be set.
  */
 export interface ValidatedCreateFolderInput {
   name: string;
   parentId: UUID | null;
-  emoji: Emoji | null;
-  color: PromptColor | null;
 }
 
 export function validateCreateFolderInput(input: unknown): ValidatedCreateFolderInput {
@@ -286,8 +287,6 @@ export function validateCreateFolderInput(input: unknown): ValidatedCreateFolder
   return {
     name: validateString(obj.name, "name", 1, 255),
     parentId: validateUUIDOrNull(obj.parentId),
-    emoji: validateEmojiOrNull(obj.emoji),
-    color: validateColorOrNull(obj.color),
   };
 }
 

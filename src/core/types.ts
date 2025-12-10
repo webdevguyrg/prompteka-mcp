@@ -35,15 +35,16 @@ export function asEmoji(value: string | null | undefined): Emoji | null | undefi
 
 /**
  * Folder domain object
+ *
+ * Note: Folders do NOT have emoji or color in the actual Prompteka database.
+ * Only prompts support emoji and color styling.
  */
 export interface Folder {
   id: UUID;
   name: string;
-  emoji: Emoji | null | undefined;
-  color: PromptColor | null | undefined;
   createdAt: string; // ISO 8601 timestamp
   updatedAt: string; // ISO 8601 timestamp
-  parentId: UUID | null | undefined; // For nested folders
+  parentId: UUID | null | undefined; // For nested folders (reserved for future use)
 }
 
 /**

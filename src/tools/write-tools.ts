@@ -404,16 +404,6 @@ export function createCreateFolderTool(): Tool {
           type: ["string", "null"],
           description: "Parent folder ID for nesting (optional)",
         },
-        emoji: {
-          type: ["string", "null"],
-          maxLength: 2,
-          description: "Emoji (1-2 characters, optional)",
-        },
-        color: {
-          type: ["string", "null"],
-          enum: ["red", "orange", "yellow", "green", "blue", "purple", null],
-          description: "Color (optional)",
-        },
       },
       required: ["name"],
       additionalProperties: false,
@@ -502,16 +492,6 @@ export function createUpdateFolderTool(): Tool {
         parentId: {
           type: ["string", "null"],
           description: "New parent folder (optional)",
-        },
-        emoji: {
-          type: ["string", "null"],
-          maxLength: 2,
-          description: "New emoji (optional)",
-        },
-        color: {
-          type: ["string", "null"],
-          enum: ["red", "orange", "yellow", "green", "blue", "purple", null],
-          description: "New color (optional)",
         },
       },
       required: ["id"],

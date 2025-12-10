@@ -30,22 +30,14 @@ import { getLogger } from "../observability/logger.js";
 
 /**
  * List all folders
- *
- * Input: { includeEmpty?: boolean }
  */
 export function createListFoldersTool(): Tool {
   return {
     name: "list_folders",
-    description: "List all folders in your Prompteka library with hierarchy information",
+    description: "List all folders in your Prompteka library",
     inputSchema: {
       type: "object",
-      properties: {
-        includeEmpty: {
-          type: "boolean",
-          description: "Include folders with no prompts (default: false)",
-          default: false,
-        },
-      },
+      properties: {},
       additionalProperties: false,
     },
   };
@@ -61,21 +53,14 @@ export async function handleListFolders(input: unknown): Promise<TextContent> {
       throw new PromptekaMCPError(ErrorCodes.INVALID_INPUT, "Input must be an object");
     }
 
-    const obj = input as Record<string, unknown>;
-    const includeEmpty = obj.includeEmpty === true;
-
     // Get database reader
     const db = getDatabaseReader();
 
     // List folders
     const folders = db.listFolders();
 
-    // Filter if needed
-    const filtered = includeEmpty
-      ? folders
-      : folders.filter(
-          (f) => (f.emoji !== undefined && f.emoji !== null) || folders.length < 50
-        );
+    // All folders are returned - filtering by empty status would require additional DB queries
+    const filtered = folders;
 
     // Log success
     logger.logSuccess("list_folders", timer(), {

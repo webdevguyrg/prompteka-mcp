@@ -299,8 +299,6 @@ export class PromptekaDatabaseAccessor {
       id: result.id as UUID,
       name: result.name,
       parentId: result.parentId as UUID | null | undefined,
-      emoji: result.emoji as Emoji | null | undefined,
-      color: result.color as PromptColor | null | undefined,
       createdAt: result.createdAt,
       updatedAt: result.updatedAt,
     };
@@ -884,8 +882,6 @@ export class PromptekaDatabaseAccessor {
   createFolder(data: {
     name: string;
     parentId: UUID | null | undefined;
-    emoji: Emoji | null | undefined;
-    color: PromptColor | null | undefined;
   }): UUID {
     this.ensureConnected();
 
@@ -915,16 +911,14 @@ export class PromptekaDatabaseAccessor {
         const now = new Date().toISOString();
 
         const stmt = this.db!.prepare(`
-          INSERT INTO folders (id, name, parent_id, emoji, color, created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?)
+          INSERT INTO folders (id, name, parent_id, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?)
         `);
 
         stmt.run(
           id,
           data.name,
           data.parentId || null,
-          data.emoji || null,
-          data.color || null,
           now,
           now
         );
@@ -952,8 +946,6 @@ export class PromptekaDatabaseAccessor {
     data: Partial<{
       name: string;
       parentId: UUID | null;
-      emoji: Emoji | null;
-      color: PromptColor | null;
     }>
   ): void {
     this.ensureConnected();
@@ -1020,14 +1012,6 @@ export class PromptekaDatabaseAccessor {
         if ("parentId" in data) {
           updates.push("parent_id = ?");
           params.push(data.parentId || null);
-        }
-        if ("emoji" in data) {
-          updates.push("emoji = ?");
-          params.push(data.emoji || null);
-        }
-        if ("color" in data) {
-          updates.push("color = ?");
-          params.push(data.color || null);
         }
 
         if (updates.length === 0) {
@@ -1372,8 +1356,6 @@ export class PromptekaDatabaseAccessor {
         id: folder.id as UUID,
         name: folder.name,
         parentId: folder.parentId as UUID | null | undefined,
-        emoji: folder.emoji as Emoji | null | undefined,
-        color: folder.color as PromptColor | null | undefined,
         createdAt: folder.createdAt,
         updatedAt: folder.updatedAt,
       };

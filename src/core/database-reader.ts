@@ -182,8 +182,6 @@ export class PromptekaDatabaseReader {
           id,
           name,
           parent_id as parentId,
-          emoji,
-          color,
           created_at as createdAt,
           updated_at as updatedAt,
           (SELECT COUNT(*) FROM folders WHERE parent_id = f.id) as childCount,
@@ -196,8 +194,6 @@ export class PromptekaDatabaseReader {
         id: UUID;
         name: string;
         parentId: UUID | null;
-        emoji?: string;
-        color?: string;
         createdAt: string;
         updatedAt: string;
         childCount: number;
@@ -208,8 +204,6 @@ export class PromptekaDatabaseReader {
         id: f.id as UUID,
         name: f.name,
         parentId: f.parentId as UUID | null | undefined,
-        emoji: f.emoji as Emoji | null | undefined,
-        color: f.color as PromptColor | null | undefined,
         createdAt: f.createdAt,
         updatedAt: f.updatedAt,
       }));
