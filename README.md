@@ -10,7 +10,7 @@
 [Prompteka](https://prompteka.net) is a native macOS app (available on the [App Store](https://apps.apple.com/app/prompteka/id6738107425)) that lets you organize, search, and manage your AI prompt library locally on your Mac. Think of it as a smart folder system for all your prompts with tagging, emojis, colors, and full-text search.
 
 **What does this MCP Server do?**
-This server enables AI assistants (like Claude in Claude Desktop or Claude Code) to directly access and manage your Prompteka library programmatically. Instead of manually copying prompts in and out, your AI assistant can:
+This server enables any MCP-compatible AI assistant (Claude Desktop, Cursor, and others) to directly access and manage your Prompteka library programmatically. Instead of manually copying prompts in and out, your AI assistant can:
 - 📖 Read and search your entire prompt library
 - ✍️ Create new prompts and organize them
 - 🎨 Update existing prompts with new content
@@ -31,8 +31,8 @@ The MCP server connects directly to your Prompteka database, so changes made by 
 
 **Installation:**
 1. Have [Prompteka app](https://apps.apple.com/app/prompteka/id6738107425) installed
-2. `npm install -g prompteka-mcp`
-3. Configure in Claude Desktop/Code with the MCP config
+2. `npm install -g prompteka-mcp` (once published)
+3. Configure your MCP client (Claude Desktop, Cursor, etc.)
 4. Start using: "Add this prompt to my Security folder"
 
 **Ready to dive in?** Jump to [Workflow Scenarios](#workflow-scenarios--support-matrix) to see what you can do with MCP + Prompteka.
@@ -220,13 +220,7 @@ which prompteka-mcp  # Should show path to installed binary
 
 The MCP server is now installed. Next, configure your MCP-compatible AI tool to use it.
 
-**For MCP Desktop/CLI Tools:**
-
-Locate your MCP configuration file:
-- Common locations: `~/.config/mcp/config.json` or `~/.mcp/config.json`
-- Tool-specific: Check your tool's documentation
-
-Add this configuration:
+Add this server configuration to your MCP client:
 
 ```json
 {
@@ -242,7 +236,16 @@ Add this configuration:
 }
 ```
 
-Then restart your MCP client.
+**Common MCP client configuration locations:**
+
+| Client | Config File Location |
+|--------|---------------------|
+| Claude Desktop (macOS) | `~/Library/Application Support/Claude/claude_desktop_config.json` |
+| Claude Desktop (Windows) | `%AppData%\Claude\claude_desktop_config.json` |
+| Cursor | Check Settings → MCP |
+| Other clients | Refer to your client's MCP documentation |
+
+After adding the configuration, **fully restart your MCP client** (quit and reopen, not just close the window).
 
 ### Step 3: Verify Installation
 
@@ -306,7 +309,7 @@ Log output appears in your MCP tool's console.
 ### Read-Only Tools (5 tools, Direct Database Access)
 
 **`list_folders`**
-Get all your folders with metadata (emoji, color, counts).
+Get all your folders with metadata (name, parent hierarchy, timestamps).
 
 **`list_prompts`**
 Get prompts from a specific folder with pagination.
@@ -332,7 +335,7 @@ Modify an existing prompt (title, content, folder, emoji, color, URL).
 Delete a prompt (requires explicit `confirmDelete=true` safety confirmation, idempotent - safe to retry).
 
 **`create_folder`**
-Create a new folder with optional emoji and color.
+Create a new folder with optional parent folder for nesting.
 
 **`update_folder`**
 Rename or reorganize a folder.
@@ -341,7 +344,7 @@ Rename or reorganize a folder.
 Delete a folder (requires explicit `confirmDelete=true` safety confirmation).
 - Can delete empty folders instantly
 - Can delete folder with all contents using `recursive=true`
-- Claude will ask for confirmation before deleting folders with contents
+- AI will ask for confirmation before deleting folders with contents
 
 **`move_prompt`**
 Move a prompt to a different folder.
@@ -395,25 +398,25 @@ Real-world scenarios showing different states (no prompts, one prompt, multiple 
 
 | Scenario | User Action | Folder State | Prompt State | What Happens | Currently Supported |
 |----------|-------------|--------------|--------------|--------------|---------------------|
-| ✨ **Save Generated Prompt** | "Save this as 'Security Checklist' in Security folder" | Folder exists | ❌ New | Claude calls `create_prompt` with title, content, folderId | ✅ YES |
-| ✨ **Save Without Folder** | "Save that as 'Quick Test'" | ❌ Must choose or create | ❌ New | Claude calls `list_folders`, user picks, then `create_prompt` | ✅ YES |
-| ✨✨ **Save & Create Folder** | "Save as 'Testing' in new folder 'QA'" | ❌ Doesn't exist | ❌ New | Claude calls `create_folder`, then `create_prompt` | ✅ YES |
-| 📖 **Find & Run Prompt** | "Run my code review prompt" | ✅ Single exists | ✅ Single match | Claude calls `search_prompts("code review")`, gets result, executes it | ✅ YES |
-| 📖 **Ambiguous Search** | "Run code review prompt" | ✅ Exists | ✅ Multiple matches (General, Security, Performance) | Claude calls `search_prompts`, shows numbered list, user picks, executes | ✅ YES |
-| 📖 **Run from Folder** | "Run all testing prompts" | ✅ Testing folder exists | ✅ Multiple (5 prompts) | Claude calls `list_prompts(folderId)`, shows all 5, user selects or runs all sequentially | ✅ YES |
-| 📖 **Search All Prompts** | "Find prompts about authentication" | N/A | ✅ Found 3 matches | Claude calls `search_prompts("authentication")`, shows: Password Auth, OAuth, SAML | ✅ YES |
-| ✨ **Save Prompt Variation** | "Save this variant as 'Code Review v2'" in existing folder | ✅ Exists | ❌ New (variation) | Claude calls `create_prompt` in same folder, user can now switch between v1 and v2 | ✅ YES |
-| 🔨 **Update Existing Prompt** | "Update my security prompt with this new content" | ✅ Exists | ✅ Single found | Claude calls `search_prompts`, confirms ID, calls `update_prompt` | ✅ YES |
-| 🔨 **Move Prompt** | "Move this prompt from Personal to Work" | ✅ Both exist | ✅ Found | Claude calls `move_prompt` to change folderId | ✅ YES |
-| ✨✨✨ **Organize by Folder** | "Create folders for Work, Personal, Testing" | ❌ Don't exist | N/A | Claude calls `create_folder` 3 times with different names | ✅ YES |
-| 📖 **List Everything** | "Show me all my prompts organized by folder" | ✅ Multiple | ✅ Multiple | Claude calls `list_folders`, then `list_prompts` for each folder | ✅ YES |
-| 📖 **Batch Review** | "Run all security prompts against this code" | ✅ Security folder exists | ✅ Multiple (5 security prompts) | Claude calls `list_prompts(securityFolderId)`, runs each one, compares results | ✅ YES |
-| 📖 **Prompt Chain** | "Walk me through: Setup > Configure > Deploy" | ✅ Exists | ✅ 3 prompts in sequence | Claude calls `search_prompts` for each, executes in order with context passed between | ✅ YES |
-| 🗑️ **Delete Old Prompt** | "Remove the old password prompt" | ✅ Exists | ✅ Single found | Claude calls `search_prompts("password")`, confirms ID, calls `delete_prompt` | ✅ YES |
-| 🔨 **Rename Folder** | "Rename Security folder to SecOps" | ✅ Exists | N/A | Claude calls `update_folder` with new name | ✅ YES |
-| 🗑️ **Delete Empty Folder** | "Clean up old Test folder" | ✅ Empty folder exists | N/A (folder empty) | Claude calls `delete_folder` | ✅ YES |
-| 🗑️ **Delete with Contents** | "Remove Testing folder and all prompts in it" | ✅ Exists with prompts | ✅ Multiple | Claude asks user to confirm, then calls `delete_folder(recursive=true, confirmDelete=true)` | ✅ YES (with confirmation) |
-| ✅ **Health Check** | "Is the MCP server running?" | N/A | N/A | Claude calls `health_check`, gets server version and connectivity status | ✅ YES |
+| ✨ **Save Generated Prompt** | "Save this as 'Security Checklist' in Security folder" | Folder exists | ❌ New | AI calls `create_prompt` with title, content, folderId | ✅ YES |
+| ✨ **Save Without Folder** | "Save that as 'Quick Test'" | ❌ Must choose or create | ❌ New | AI calls `list_folders`, user picks, then `create_prompt` | ✅ YES |
+| ✨✨ **Save & Create Folder** | "Save as 'Testing' in new folder 'QA'" | ❌ Doesn't exist | ❌ New | AI calls `create_folder`, then `create_prompt` | ✅ YES |
+| 📖 **Find & Run Prompt** | "Run my code review prompt" | ✅ Single exists | ✅ Single match | AI calls `search_prompts("code review")`, gets result, executes it | ✅ YES |
+| 📖 **Ambiguous Search** | "Run code review prompt" | ✅ Exists | ✅ Multiple matches (General, Security, Performance) | AI calls `search_prompts`, shows numbered list, user picks, executes | ✅ YES |
+| 📖 **Run from Folder** | "Run all testing prompts" | ✅ Testing folder exists | ✅ Multiple (5 prompts) | AI calls `list_prompts(folderId)`, shows all 5, user selects or runs all sequentially | ✅ YES |
+| 📖 **Search All Prompts** | "Find prompts about authentication" | N/A | ✅ Found 3 matches | AI calls `search_prompts("authentication")`, shows: Password Auth, OAuth, SAML | ✅ YES |
+| ✨ **Save Prompt Variation** | "Save this variant as 'Code Review v2'" in existing folder | ✅ Exists | ❌ New (variation) | AI calls `create_prompt` in same folder, user can now switch between v1 and v2 | ✅ YES |
+| 🔨 **Update Existing Prompt** | "Update my security prompt with this new content" | ✅ Exists | ✅ Single found | AI calls `search_prompts`, confirms ID, calls `update_prompt` | ✅ YES |
+| 🔨 **Move Prompt** | "Move this prompt from Personal to Work" | ✅ Both exist | ✅ Found | AI calls `move_prompt` to change folderId | ✅ YES |
+| ✨✨✨ **Organize by Folder** | "Create folders for Work, Personal, Testing" | ❌ Don't exist | N/A | AI calls `create_folder` 3 times with different names | ✅ YES |
+| 📖 **List Everything** | "Show me all my prompts organized by folder" | ✅ Multiple | ✅ Multiple | AI calls `list_folders`, then `list_prompts` for each folder | ✅ YES |
+| 📖 **Batch Review** | "Run all security prompts against this code" | ✅ Security folder exists | ✅ Multiple (5 security prompts) | AI calls `list_prompts(securityFolderId)`, runs each one, compares results | ✅ YES |
+| 📖 **Prompt Chain** | "Walk me through: Setup > Configure > Deploy" | ✅ Exists | ✅ 3 prompts in sequence | AI calls `search_prompts` for each, executes in order with context passed between | ✅ YES |
+| 🗑️ **Delete Old Prompt** | "Remove the old password prompt" | ✅ Exists | ✅ Single found | AI calls `search_prompts("password")`, confirms ID, calls `delete_prompt` | ✅ YES |
+| 🔨 **Rename Folder** | "Rename Security folder to SecOps" | ✅ Exists | N/A | AI calls `update_folder` with new name | ✅ YES |
+| 🗑️ **Delete Empty Folder** | "Clean up old Test folder" | ✅ Empty folder exists | N/A (folder empty) | AI calls `delete_folder` | ✅ YES |
+| 🗑️ **Delete with Contents** | "Remove Testing folder and all prompts in it" | ✅ Exists with prompts | ✅ Multiple | AI asks user to confirm, then calls `delete_folder(recursive=true, confirmDelete=true)` | ✅ YES (with confirmation) |
+| ✅ **Health Check** | "Is the MCP server running?" | N/A | N/A | AI calls `health_check`, gets server version and connectivity status | ✅ YES |
 
 ---
 
@@ -422,7 +425,7 @@ Real-world scenarios showing different states (no prompts, one prompt, multiple 
 #### Pattern 1: Save Iteration
 ```
 User: "Save that as 'Review v2' in Security"
-Claude: list_folders() → create_prompt(title, content, folderId)
+AI: list_folders() → create_prompt(title, content, folderId)
 Result: New version saved, can switch between v1 and v2 later
 ```
 **Support**: ✅ Full (create_prompt tool)
@@ -430,7 +433,7 @@ Result: New version saved, can switch between v1 and v2 later
 #### Pattern 2: Search & Execute
 ```
 User: "Run my code review prompt"
-Claude: search_prompts("code review")
+AI: search_prompts("code review")
   → If 1 match: execute
   → If multiple: show numbered list, user picks
 Result: Prompt retrieved and executed instantly
@@ -440,8 +443,8 @@ Result: Prompt retrieved and executed instantly
 #### Pattern 3: Batch Run
 ```
 User: "Run all security prompts against this code"
-Claude: list_prompts(securityFolderId) → shows 5 prompts
-Claude: For each prompt: execute sequentially
+AI: list_prompts(securityFolderId) → shows 5 prompts
+AI: For each prompt: execute sequentially
 Result: Comprehensive security analysis from multiple angles
 ```
 **Support**: ✅ Full (list_prompts + get_prompt tools)
@@ -449,7 +452,7 @@ Result: Comprehensive security analysis from multiple angles
 #### Pattern 4: Organize
 ```
 User: "Move testing prompts to a QA folder"
-Claude: search_prompts() → create_folder("QA") → move_prompt() × N
+AI: search_prompts() → create_folder("QA") → move_prompt() × N
 Result: Prompts reorganized, visible in Prompteka app immediately
 ```
 **Support**: ✅ Full (search_prompts + create_folder + move_prompt tools)

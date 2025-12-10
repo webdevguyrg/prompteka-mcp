@@ -38,6 +38,14 @@
   ],
   "author": "Robert Grow",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/webdevguyrg/prompteka-mcp.git"
+  },
+  "homepage": "https://prompteka.net/mcp",
+  "bugs": {
+    "url": "https://github.com/webdevguyrg/prompteka-mcp/issues"
+  },
   "engines": {
     "node": ">=18.0.0",
     "npm": ">=9.0.0"
