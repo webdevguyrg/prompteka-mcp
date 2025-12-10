@@ -118,7 +118,8 @@ export class PromptekaDatabaseAccessor {
       this.db.pragma("foreign_keys = ON");
 
       // Verify database schema version matches expectations
-      const schemaVersion = this.db.pragma("schema_version");
+      const schemaVersionResult = this.db.pragma("schema_version", { simple: true });
+      const schemaVersion = schemaVersionResult as number;
       if (schemaVersion !== PROMPTEKA_SCHEMA_VERSION) {
         this.db.close();
         throw new PromptekaMCPError(

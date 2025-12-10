@@ -112,12 +112,12 @@ export class PromptekaDatabaseReader {
       // Open read-only connection
       this.db = new Database(this.dbPath, { readonly: true });
 
-      // Enable WAL mode recognition (already enabled by Prompteka app)
-      // This doesn't fail if WAL isn't enabled, just confirms readiness
-      this.db.pragma("journal_mode = WAL");
+      // Note: WAL mode is already enabled by Prompteka app
+      // We don't set it here because read-only connections cannot change journal mode
 
       // Verify database schema version matches expectations
-      const schemaVersion = this.db.pragma("schema_version");
+      const schemaVersionResult = this.db.pragma("schema_version", { simple: true });
+      const schemaVersion = schemaVersionResult as number;
       if (schemaVersion !== PROMPTEKA_SCHEMA_VERSION) {
         this.db.close();
         throw new PromptekaMCPError(
