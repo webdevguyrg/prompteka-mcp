@@ -35,6 +35,28 @@ The MCP server connects directly to your Prompteka database, so changes made by 
 3. Configure in Claude Desktop/Code with the MCP config
 4. Start using: "Add this prompt to my Security folder"
 
+**Ready to dive in?** Jump to [Workflow Scenarios](#workflow-scenarios--support-matrix) to see what you can do with MCP + Prompteka.
+
+---
+
+## Table of Contents
+
+1. [Features](#features)
+2. [How It Works](#how-it-works)
+3. [Installation](#installation)
+4. [Configuration](#advanced-configuration)
+5. [Available Tools](#available-tools-12-total)
+6. [Workflow Scenarios](#workflow-scenarios--support-matrix)
+7. [Security & Privacy](#security--privacy)
+8. [Troubleshooting](#troubleshooting)
+9. [Support & Resources](#support--resources)
+
+---
+
+> 🚨 **Regular Backups Recommended**
+>
+> Your prompt library is valuable! We strongly encourage you to regularly backup your Prompteka library. Backups are fully supported through the Prompteka app itself and protect you against accidental deletions or data loss. You can export your entire library as a backup file directly from Prompteka - this is a safe, built-in feature that ensures you never lose your prompts.
+
 ---
 
 ## Features
