@@ -36,6 +36,48 @@ import { getLogger } from "../observability/logger.js";
 const PROMPTEKA_SCHEMA_VERSION = 10; // Current Prompteka schema version
 
 /**
+ * Map color names to hex codes used in Prompteka database
+ */
+const COLOR_NAME_TO_HEX: Record<PromptColor, string> = {
+  red: "#EF4444",
+  orange: "#F97316",
+  yellow: "#EAB308",
+  green: "#22C55E",
+  blue: "#3B82F6",
+  purple: "#A855F7",
+};
+
+/**
+ * Map hex codes back to color names
+ */
+const HEX_TO_COLOR_NAME: Record<string, PromptColor> = {
+  "#EF4444": "red",
+  "#F97316": "orange",
+  "#EAB308": "yellow",
+  "#22C55E": "green",
+  "#3B82F6": "blue",
+  "#A855F7": "purple",
+};
+
+/**
+ * Convert color name to hex code for database storage
+ */
+function colorNameToHex(colorName: PromptColor | null | undefined): string {
+  if (!colorName) return COLOR_NAME_TO_HEX.blue; // default to blue
+  return COLOR_NAME_TO_HEX[colorName] || COLOR_NAME_TO_HEX.blue;
+}
+
+/**
+ * Convert hex code to color name for API response
+ */
+function hexToColorName(hexCode: string | null | undefined): PromptColor {
+  if (!hexCode) return "blue";
+  return HEX_TO_COLOR_NAME[hexCode] || "blue";
+}
+
+// Note: hexToColorName will be used when reading prompts from database
+
+/**
  * Validates that a path is safe (no symlinks, no traversal)
  */
 function validatePath(filePath: string): void {
@@ -450,9 +492,9 @@ export class PromptekaDatabaseAccessor {
         SELECT
           id,
           title,
-          content,
+          body,
           folder_id as folderId,
-          emoji,
+          icon,
           color,
           url,
           created_at as createdAt,
@@ -469,26 +511,26 @@ export class PromptekaDatabaseAccessor {
       ) as Array<{
         id: UUID;
         title: string;
-        content: string;
+        body: string;
         folderId: UUID | null;
-        emoji?: string;
+        icon?: string;
         color?: string;
         url?: string;
-        createdAt: string;
-        updatedAt: string;
+        createdAt: number;
+        updatedAt: number;
       }>;
 
       return {
         prompts: prompts.map((p) => ({
           id: p.id as UUID,
           title: p.title,
-          content: p.content,
+          content: p.body,
           folderId: p.folderId as UUID | null | undefined,
-          emoji: p.emoji as Emoji | null | undefined,
-          color: p.color as PromptColor | null | undefined,
+          emoji: p.icon as Emoji | null | undefined,
+          color: hexToColorName(p.color),
           url: p.url,
-          createdAt: p.createdAt,
-          updatedAt: p.updatedAt,
+          createdAt: new Date(p.createdAt * 1000).toISOString(),
+          updatedAt: new Date(p.updatedAt * 1000).toISOString(),
         })),
         total,
       };
@@ -513,9 +555,9 @@ export class PromptekaDatabaseAccessor {
         SELECT
           id,
           title,
-          content,
+          body,
           folder_id as folderId,
-          emoji,
+          icon,
           color,
           url,
           created_at as createdAt,
@@ -527,13 +569,13 @@ export class PromptekaDatabaseAccessor {
       const prompt = this.db!.prepare(query).get(id) as {
         id: UUID;
         title: string;
-        content: string;
+        body: string;
         folderId: UUID | null;
-        emoji?: string;
+        icon?: string;
         color?: string;
         url?: string;
-        createdAt: string;
-        updatedAt: string;
+        createdAt: number;
+        updatedAt: number;
       } | undefined;
 
       if (!prompt) {
@@ -543,13 +585,13 @@ export class PromptekaDatabaseAccessor {
       return {
         id: prompt.id as UUID,
         title: prompt.title,
-        content: prompt.content,
+        content: prompt.body,
         folderId: prompt.folderId as UUID | null | undefined,
-        emoji: prompt.emoji as Emoji | null | undefined,
-        color: prompt.color as PromptColor | null | undefined,
+        emoji: prompt.icon as Emoji | null | undefined,
+        color: hexToColorName(prompt.color),
         url: prompt.url,
-        createdAt: prompt.createdAt,
-        updatedAt: prompt.updatedAt,
+        createdAt: new Date(prompt.createdAt * 1000).toISOString(),
+        updatedAt: new Date(prompt.updatedAt * 1000).toISOString(),
       };
     } catch (error) {
       const message =
@@ -588,7 +630,7 @@ export class PromptekaDatabaseAccessor {
       if (hasFTS) {
         countQuery = `
           SELECT COUNT(*) as count FROM prompts_fts
-          WHERE title MATCH ? OR content MATCH ?
+          WHERE title MATCH ? OR body MATCH ?
         `;
         params.push(searchQuery);
         params.push(searchQuery);
@@ -597,16 +639,16 @@ export class PromptekaDatabaseAccessor {
           SELECT
             p.id,
             p.title,
-            p.content,
+            p.body,
             p.folder_id as folderId,
-            p.emoji,
+            p.icon,
             p.color,
             p.url,
             p.created_at as createdAt,
             p.updated_at as updatedAt
           FROM prompts p
           INNER JOIN prompts_fts f ON p.id = f.rowid
-          WHERE f.title MATCH ? OR f.content MATCH ?
+          WHERE f.title MATCH ? OR f.body MATCH ?
           ORDER BY p.created_at DESC
           LIMIT ? OFFSET ?
         `;
@@ -616,7 +658,7 @@ export class PromptekaDatabaseAccessor {
         const likeQuery = `%${searchQuery}%`;
         countQuery = `
           SELECT COUNT(*) as count FROM prompts
-          WHERE title LIKE ? OR content LIKE ?
+          WHERE title LIKE ? OR body LIKE ?
         `;
         params.push(likeQuery);
         params.push(likeQuery);
@@ -625,15 +667,15 @@ export class PromptekaDatabaseAccessor {
           SELECT
             id,
             title,
-            content,
+            body,
             folder_id as folderId,
-            emoji,
+            icon,
             color,
             url,
             created_at as createdAt,
             updated_at as updatedAt
           FROM prompts
-          WHERE title LIKE ? OR content LIKE ?
+          WHERE title LIKE ? OR body LIKE ?
           ORDER BY created_at DESC
           LIMIT ? OFFSET ?
         `;
@@ -653,26 +695,26 @@ export class PromptekaDatabaseAccessor {
       ) as Array<{
         id: UUID;
         title: string;
-        content: string;
+        body: string;
         folderId: UUID | null;
-        emoji?: string;
+        icon?: string;
         color?: string;
         url?: string;
-        createdAt: string;
-        updatedAt: string;
+        createdAt: number;
+        updatedAt: number;
       }>;
 
       return {
         prompts: prompts.map((p) => ({
           id: p.id as UUID,
           title: p.title,
-          content: p.content,
+          content: p.body,
           folderId: p.folderId as UUID | null | undefined,
-          emoji: p.emoji as Emoji | null | undefined,
-          color: p.color as PromptColor | null | undefined,
+          emoji: p.icon as Emoji | null | undefined,
+          color: hexToColorName(p.color),
           url: p.url,
-          createdAt: p.createdAt,
-          updatedAt: p.updatedAt,
+          createdAt: new Date(p.createdAt * 1000).toISOString(),
+          updatedAt: new Date(p.updatedAt * 1000).toISOString(),
         })),
         total,
       };
@@ -710,10 +752,13 @@ export class PromptekaDatabaseAccessor {
     return this.executeWithRetry(() => {
       const transaction = this.db!.transaction(() => {
         const id = uuidv4() as UUID;
-        const now = new Date().toISOString();
 
+        // Map API fields to database schema:
+        // - content -> body
+        // - emoji -> icon
+        // - color name -> hex code
         const stmt = this.db!.prepare(`
-          INSERT INTO prompts (id, title, content, folder_id, emoji, color, url, created_at, updated_at)
+          INSERT INTO prompts (id, title, body, folder_id, icon, color, url, created_at, updated_at)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         `);
 
@@ -722,11 +767,11 @@ export class PromptekaDatabaseAccessor {
           data.title,
           data.content,
           data.folderId || null,
-          data.emoji || null,
-          data.color || null,
+          data.emoji || "📝",
+          colorNameToHex(data.color),
           data.url || null,
-          now,
-          now
+          Math.floor(Date.now() / 1000), // Unix timestamp in seconds
+          Math.floor(Date.now() / 1000)
         );
 
         // Verify write was successful
@@ -778,7 +823,7 @@ export class PromptekaDatabaseAccessor {
 
     this.executeWithRetry(() => {
       const transaction = this.db!.transaction(() => {
-        const now = new Date().toISOString();
+        const now = Math.floor(Date.now() / 1000); // Unix timestamp in seconds
         const updates: string[] = [];
         const params: unknown[] = [];
 
@@ -787,7 +832,8 @@ export class PromptekaDatabaseAccessor {
           params.push(data.title);
         }
         if ("content" in data) {
-          updates.push("content = ?");
+          // Map API field 'content' to database column 'body'
+          updates.push("body = ?");
           params.push(data.content);
         }
         if ("folderId" in data) {
@@ -795,12 +841,14 @@ export class PromptekaDatabaseAccessor {
           params.push(data.folderId || null);
         }
         if ("emoji" in data) {
-          updates.push("emoji = ?");
-          params.push(data.emoji || null);
+          // Map API field 'emoji' to database column 'icon'
+          updates.push("icon = ?");
+          params.push(data.emoji || "📝");
         }
         if ("color" in data) {
+          // Map color name to hex code
           updates.push("color = ?");
-          params.push(data.color || null);
+          params.push(colorNameToHex(data.color));
         }
         if ("url" in data) {
           updates.push("url = ?");
@@ -1274,18 +1322,18 @@ export class PromptekaDatabaseAccessor {
 
           // Create new prompt
           const newId = uuidv4() as UUID;
-          const now = new Date().toISOString();
+          const now = Math.floor(Date.now() / 1000); // Unix timestamp in seconds
 
           this.db!.prepare(`
-            INSERT INTO prompts (id, title, content, folder_id, emoji, color, url, created_at, updated_at)
+            INSERT INTO prompts (id, title, body, folder_id, icon, color, url, created_at, updated_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
           `).run(
             newId,
             title,
             content,
             mappedFolderId || null,
-            emoji,
-            color,
+            emoji || "📝",
+            colorNameToHex(color as PromptColor | null | undefined),
             url,
             now,
             now
