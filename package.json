@@ -3,15 +3,15 @@
   "version": "1.0.0",
   "description": "Model Context Protocol server for Prompteka - enables AI assistants to read and write prompts",
   "type": "module",
-  "main": "dist/server.js",
+  "main": "build/server.js",
   "exports": {
-    ".": "./dist/server.js"
+    ".": "./build/server.js"
   },
   "bin": {
-    "prompteka-mcp": "dist/server.js"
+    "prompteka-mcp": "build/server.js"
   },
   "files": [
-    "dist/",
+    "build/",
     "README.md",
     "LICENSE",
     "documentation/"
