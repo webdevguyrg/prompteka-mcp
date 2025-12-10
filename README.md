@@ -309,7 +309,7 @@ Create a new prompt in a folder with emoji, color, and optional URL.
 Modify an existing prompt (title, content, folder, emoji, color, URL).
 
 **`delete_prompt`**
-Delete a prompt (idempotent - safe to retry).
+Delete a prompt (requires explicit `confirmDelete=true` safety confirmation, idempotent - safe to retry).
 
 **`create_folder`**
 Create a new folder with optional emoji and color.
@@ -318,7 +318,10 @@ Create a new folder with optional emoji and color.
 Rename or reorganize a folder.
 
 **`delete_folder`**
-Delete a folder (with safety checks to prevent accidental data loss).
+Delete a folder (requires explicit `confirmDelete=true` safety confirmation).
+- Can delete empty folders instantly
+- Can delete folder with all contents using `recursive=true`
+- Claude will ask for confirmation before deleting folders with contents
 
 **`move_prompt`**
 Move a prompt to a different folder.
@@ -389,7 +392,7 @@ Real-world scenarios showing different states (no prompts, one prompt, multiple 
 | 🗑️ **Delete Old Prompt** | "Remove the old password prompt" | ✅ Exists | ✅ Single found | Claude calls `search_prompts("password")`, confirms ID, calls `delete_prompt` | ✅ YES |
 | 🔨 **Rename Folder** | "Rename Security folder to SecOps" | ✅ Exists | N/A | Claude calls `update_folder` with new name | ✅ YES |
 | 🗑️ **Delete Empty Folder** | "Clean up old Test folder" | ✅ Empty folder exists | N/A (folder empty) | Claude calls `delete_folder` | ✅ YES |
-| 🗑️ **Delete with Contents** | "Remove Testing folder and all prompts in it" | ✅ Exists with prompts | ✅ Multiple | Claude needs to `delete_prompt` for each, then `delete_folder` | ✅ YES (manual but supported) |
+| 🗑️ **Delete with Contents** | "Remove Testing folder and all prompts in it" | ✅ Exists with prompts | ✅ Multiple | Claude asks user to confirm, then calls `delete_folder(recursive=true, confirmDelete=true)` | ✅ YES (with confirmation) |
 | ✅ **Health Check** | "Is the MCP server running?" | N/A | N/A | Claude calls `health_check`, gets server version, tool count, connectivity status | ✅ YES |
 
 ---
