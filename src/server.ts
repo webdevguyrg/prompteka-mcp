@@ -43,7 +43,7 @@ import {
   handleMovePrompt,
 } from "./tools/index.js";
 
-const VERSION = "1.0.1";
+const VERSION = "1.0.2";
 
 // Tool registry
 interface ToolHandler {
