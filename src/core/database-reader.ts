@@ -372,85 +372,39 @@ export class PromptekaDatabaseReader {
     this.ensureConnected();
 
     try {
-      // Escape query for FTS
-      const searchQuery = query.replace(/"/g, '""');
+      const likeQuery = `%${query.replace(/"/g, '""')}%`;
 
-      // Check if FTS table exists, fall back to LIKE if not
-      const hasFTS = this.db!
-        .prepare(
-          "SELECT name FROM sqlite_master WHERE type='table' AND name='prompts_fts'"
-        )
-        .get();
+      const countQuery = `
+        SELECT COUNT(*) as count FROM prompts
+        WHERE title LIKE ? OR body LIKE ?
+      `;
 
-      let countQuery: string;
-      let selectQuery: string;
-      const params: unknown[] = [];
-
-      if (hasFTS) {
-        // Use FTS if available
-        countQuery = `
-          SELECT COUNT(*) as count FROM prompts_fts
-          WHERE title MATCH ? OR body MATCH ?
-        `;
-        params.push(searchQuery);
-        params.push(searchQuery);
-
-        selectQuery = `
-          SELECT
-            p.id,
-            p.title,
-            p.body as content,
-            p.folder_id as folderId,
-            p.icon as emoji,
-            p.color,
-            p.url,
-            p.created_at as createdAt,
-            p.updated_at as updatedAt
-          FROM prompts p
-          INNER JOIN prompts_fts f ON p.id = f.rowid
-          WHERE f.title MATCH ? OR f.body MATCH ?
-          ORDER BY p.created_at DESC
-          LIMIT ? OFFSET ?
-        `;
-        params.push(searchQuery);
-        params.push(searchQuery);
-      } else {
-        // Fall back to LIKE search
-        const likeQuery = `%${searchQuery}%`;
-        countQuery = `
-          SELECT COUNT(*) as count FROM prompts
-          WHERE title LIKE ? OR body LIKE ?
-        `;
-        params.push(likeQuery);
-        params.push(likeQuery);
-
-        selectQuery = `
-          SELECT
-            id,
-            title,
-            body as content,
-            folder_id as folderId,
-            icon as emoji,
-            color,
-            url,
-            created_at as createdAt,
-            updated_at as updatedAt
-          FROM prompts
-          WHERE title LIKE ? OR body LIKE ?
-          ORDER BY created_at DESC
-          LIMIT ? OFFSET ?
-        `;
-        params.push(likeQuery);
-        params.push(likeQuery);
-      }
+      const selectQuery = `
+        SELECT
+          id,
+          title,
+          body as content,
+          folder_id as folderId,
+          icon as emoji,
+          color,
+          url,
+          created_at as createdAt,
+          updated_at as updatedAt
+        FROM prompts
+        WHERE title LIKE ? OR body LIKE ?
+        ORDER BY created_at DESC
+        LIMIT ? OFFSET ?
+      `;
 
       const countResult = this.db!.prepare(countQuery).get(
-        ...params.slice(0, 2)
+        likeQuery,
+        likeQuery
       ) as { count: number };
       const total = countResult.count;
 
       const prompts = this.db!.prepare(selectQuery).all(
-        ...params,
+        likeQuery,
+        likeQuery,
         limit,
         offset
       ) as Array<{
