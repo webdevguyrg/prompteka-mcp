@@ -21,16 +21,29 @@ export type PromptColor = "red" | "orange" | "yellow" | "green" | "blue" | "purp
 export type UUID = string & { readonly __brand: "UUID" };
 
 /**
+ * Helper functions to cast values to branded types
+ * These are safe when the value is guaranteed to meet the type requirements
+ */
+export function asUUID(value: string): UUID {
+  return value as UUID;
+}
+
+export function asEmoji(value: string | null | undefined): Emoji | null | undefined {
+  if (value === null || value === undefined) return value;
+  return value as Emoji;
+}
+
+/**
  * Folder domain object
  */
 export interface Folder {
   id: UUID;
   name: string;
-  emoji?: Emoji;
-  color?: PromptColor;
+  emoji: Emoji | null | undefined;
+  color: PromptColor | null | undefined;
   createdAt: string; // ISO 8601 timestamp
   updatedAt: string; // ISO 8601 timestamp
-  parentId?: UUID; // For nested folders
+  parentId: UUID | null | undefined; // For nested folders
 }
 
 /**
@@ -40,10 +53,10 @@ export interface Prompt {
   id: UUID;
   title: string;
   content: string;
-  folderId?: UUID;
-  emoji?: Emoji;
-  color?: PromptColor;
-  url?: string;
+  folderId: UUID | null | undefined;
+  emoji: Emoji | null | undefined;
+  color: PromptColor | null | undefined;
+  url: string | null | undefined;
   createdAt: string; // ISO 8601 timestamp
   updatedAt: string; // ISO 8601 timestamp
   tags?: string[];

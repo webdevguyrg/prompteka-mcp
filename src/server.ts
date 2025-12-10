@@ -7,16 +7,13 @@
  * Initializes all components and registers tools with the MCP framework.
  */
 
-import { Server } from "@modelcontextprotocol/sdk/server/stdio.js";
-import {
-  ListToolsRequestSchema,
-  CallToolRequestSchema,
-  Tool,
-} from "@modelcontextprotocol/sdk/types.js";
+import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { ListToolsRequestSchema, CallToolRequestSchema, Tool, CallToolRequest } from "@modelcontextprotocol/sdk/types.js";
 
 import { initializeLogger, getLogger } from "./observability/logger.js";
-import { initializeDatabaseReader, getDatabaseReader } from "./core/database-reader.js";
-import { initializeQueueWriter, getQueueWriter } from "./core/queue-writer.js";
+import { initializeDatabaseReader } from "./core/database-reader.js";
+import { initializeDatabaseAccessor } from "./core/database-accessor.js";
 
 // Import all tools
 import {
@@ -42,12 +39,6 @@ import {
   handleDeleteFolder,
   createMovePromptTool,
   handleMovePrompt,
-  createExportPromptsTool,
-  handleExportPrompts,
-  createBackupPromptsTool,
-  handleBackupPrompts,
-  createRestorePromptsTool,
-  handleRestorePrompts,
 } from "./tools/index.js";
 
 const VERSION = "1.0.0";
@@ -141,27 +132,6 @@ const tools: Map<string, ToolHandler> = new Map([
       handler: handleMovePrompt,
     },
   ],
-  [
-    "export_prompts",
-    {
-      tool: createExportPromptsTool(),
-      handler: handleExportPrompts,
-    },
-  ],
-  [
-    "backup_prompts",
-    {
-      tool: createBackupPromptsTool(),
-      handler: handleBackupPrompts,
-    },
-  ],
-  [
-    "restore_prompts",
-    {
-      tool: createRestorePromptsTool(),
-      handler: handleRestorePrompts,
-    },
-  ],
 ]);
 
 /**
@@ -189,15 +159,9 @@ async function main(): Promise<void> {
       throw new Error("Database health check failed");
     }
 
-    // Initialize queue writer
-    const queuePath = process.env.PROMPTEKA_QUEUE_PATH;
-    const queue = initializeQueueWriter({ queuePath });
-
-    // Clean up orphaned response files from previous session
-    const cleanedCount = await queue.cleanupOrphans();
-    if (cleanedCount > 0) {
-      logger.logDebug("server", `Cleaned ${cleanedCount} orphaned files`);
-    }
+    // Initialize write accessor for write operations
+    initializeDatabaseAccessor(dbPath);
+    logger.logDebug("server", "Write accessor initialized for database operations");
 
     // Create MCP server
     const server = new Server({
@@ -213,7 +177,7 @@ async function main(): Promise<void> {
     });
 
     // Handle call_tool
-    server.setRequestHandler(CallToolRequestSchema, async (request) => {
+    server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest) => {
       const toolName = request.params.name;
       const toolEntry = tools.get(toolName);
 
@@ -240,7 +204,8 @@ async function main(): Promise<void> {
     });
 
     // Connect via stdio
-    await server.connect(process.stdin, process.stdout);
+    const transport = new StdioServerTransport();
+    await server.connect(transport);
 
     logger.logDebug("server", `Connected with ${tools.size} tools`);
   } catch (error) {

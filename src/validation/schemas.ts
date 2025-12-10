@@ -5,12 +5,15 @@
  * Schemas follow JSON Schema draft 7 specification.
  */
 
-export const Schemas = {
-  // UUID pattern (UUIDv4)
-  UUID: "^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$",
+// UUID pattern (UUIDv4)
+const UUID_PATTERN = "^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$";
 
-  // Color enum
-  Colors: ["red", "orange", "yellow", "green", "blue", "purple"] as const,
+// Color enum
+const COLORS = ["red", "orange", "yellow", "green", "blue", "purple"] as const;
+
+export const Schemas = {
+  UUID: UUID_PATTERN,
+  Colors: COLORS,
 
   // Read Tool Schemas
   ListFolders: {
@@ -26,13 +29,13 @@ export const Schemas = {
     items: {
       type: "object" as const,
       properties: {
-        id: { type: "string", pattern: Schemas.UUID },
+        id: { type: "string", pattern: UUID_PATTERN },
         name: { type: "string", minLength: 1, maxLength: 255 },
         parentId: { type: ["string", "null"] },
         emoji: { type: ["string", "null"], maxLength: 2 },
         color: {
           type: ["string", "null"],
-          enum: [...Schemas.Colors, null],
+          enum: [...COLORS, null],
         },
         childCount: { type: "integer", minimum: 0 },
         promptCount: { type: "integer", minimum: 0 },
@@ -71,14 +74,14 @@ export const Schemas = {
         items: {
           type: "object" as const,
           properties: {
-            id: { type: "string", pattern: Schemas.UUID },
+            id: { type: "string", pattern: UUID_PATTERN },
             title: { type: "string", minLength: 1, maxLength: 255 },
             content: { type: "string", maxLength: 100000 },
             folderId: { type: ["string", "null"] },
             emoji: { type: ["string", "null"], maxLength: 2 },
             color: {
               type: ["string", "null"],
-              enum: [...Schemas.Colors, null],
+              enum: [...COLORS, null],
             },
             url: { type: ["string", "null"], format: "uri", maxLength: 2048 },
             createdAt: { type: "string", format: "date-time" },
@@ -99,7 +102,7 @@ export const Schemas = {
   GetPrompt: {
     type: "object" as const,
     properties: {
-      id: { type: "string", pattern: Schemas.UUID },
+      id: { type: "string", pattern: UUID_PATTERN },
     },
     required: ["id"],
     additionalProperties: false,
@@ -126,7 +129,7 @@ export const Schemas = {
       emoji: { type: ["string", "null"], maxLength: 2, default: null },
       color: {
         type: ["string", "null"],
-        enum: [...Schemas.Colors, null],
+        enum: [...COLORS, null],
         default: null,
       },
       url: { type: ["string", "null"], format: "uri", maxLength: 2048, default: null },
@@ -138,12 +141,12 @@ export const Schemas = {
   UpdatePrompt: {
     type: "object" as const,
     properties: {
-      id: { type: "string", pattern: Schemas.UUID },
+      id: { type: "string", pattern: UUID_PATTERN },
       title: { type: ["string", "null"], minLength: 1, maxLength: 255 },
       content: { type: ["string", "null"], minLength: 1, maxLength: 100000 },
       folderId: { type: ["string", "null"] },
       emoji: { type: ["string", "null"], maxLength: 2 },
-      color: { type: ["string", "null"], enum: [...Schemas.Colors, null] },
+      color: { type: ["string", "null"], enum: [...COLORS, null] },
       url: { type: ["string", "null"], format: "uri", maxLength: 2048 },
     },
     required: ["id"],
@@ -153,7 +156,7 @@ export const Schemas = {
   DeletePrompt: {
     type: "object" as const,
     properties: {
-      id: { type: "string", pattern: Schemas.UUID },
+      id: { type: "string", pattern: UUID_PATTERN },
     },
     required: ["id"],
     additionalProperties: false,
@@ -167,7 +170,7 @@ export const Schemas = {
       emoji: { type: ["string", "null"], maxLength: 2, default: null },
       color: {
         type: ["string", "null"],
-        enum: [...Schemas.Colors, null],
+        enum: [...COLORS, null],
         default: null,
       },
     },
@@ -178,11 +181,11 @@ export const Schemas = {
   UpdateFolder: {
     type: "object" as const,
     properties: {
-      id: { type: "string", pattern: Schemas.UUID },
+      id: { type: "string", pattern: UUID_PATTERN },
       name: { type: ["string", "null"], minLength: 1, maxLength: 255 },
       parentId: { type: ["string", "null"] },
       emoji: { type: ["string", "null"], maxLength: 2 },
-      color: { type: ["string", "null"], enum: [...Schemas.Colors, null] },
+      color: { type: ["string", "null"], enum: [...COLORS, null] },
     },
     required: ["id"],
     additionalProperties: false,
@@ -191,7 +194,7 @@ export const Schemas = {
   DeleteFolder: {
     type: "object" as const,
     properties: {
-      id: { type: "string", pattern: Schemas.UUID },
+      id: { type: "string", pattern: UUID_PATTERN },
       recursive: { type: "boolean", default: false },
     },
     required: ["id"],
@@ -203,7 +206,7 @@ export const Schemas = {
     type: "object" as const,
     properties: {
       status: { type: "string", enum: ["success", "error"] },
-      id: { type: ["string", "null"], pattern: Schemas.UUID },
+      id: { type: ["string", "null"], pattern: UUID_PATTERN },
       message: { type: "string" },
       error: { type: ["string", "null"] },
     },

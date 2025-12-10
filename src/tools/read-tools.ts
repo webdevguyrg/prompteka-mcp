@@ -14,7 +14,6 @@
 import {
   Tool,
   TextContent,
-  ErrorContent,
 } from "@modelcontextprotocol/sdk/types.js";
 import { getDatabaseReader } from "../core/database-reader.js";
 import {
@@ -52,7 +51,7 @@ export function createListFoldersTool(): Tool {
   };
 }
 
-export async function handleListFolders(input: unknown): Promise<TextContent | ErrorContent> {
+export async function handleListFolders(input: unknown): Promise<TextContent> {
   const logger = getLogger();
   const timer = logger.startTimer();
 
@@ -159,7 +158,7 @@ export function createListPromptsTool(): Tool {
   };
 }
 
-export async function handleListPrompts(input: unknown): Promise<TextContent | ErrorContent> {
+export async function handleListPrompts(input: unknown): Promise<TextContent> {
   const logger = getLogger();
   const timer = logger.startTimer();
 
@@ -268,7 +267,7 @@ export function createGetPromptTool(): Tool {
   };
 }
 
-export async function handleGetPrompt(input: unknown): Promise<TextContent | ErrorContent> {
+export async function handleGetPrompt(input: unknown): Promise<TextContent> {
   const logger = getLogger();
   const timer = logger.startTimer();
 
@@ -384,7 +383,7 @@ export function createSearchPromptsTool(): Tool {
   };
 }
 
-export async function handleSearchPrompts(input: unknown): Promise<TextContent | ErrorContent> {
+export async function handleSearchPrompts(input: unknown): Promise<TextContent> {
   const logger = getLogger();
   const timer = logger.startTimer();
 

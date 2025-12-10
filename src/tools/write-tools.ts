@@ -1,31 +1,35 @@
 /**
  * Write MCP tools
  *
- * These tools write to the import queue and wait for responses from Prompteka.
- * Operations are idempotent and support retries.
+ * These tools write directly to the Prompteka SQLite database using WAL mode.
+ * All operations are atomic, ACID-compliant, and executed immediately (<10ms).
+ * The MCP server works independently - the Prompteka app is not required for writes.
  *
  * Tools:
  * - create_prompt: Create new prompt
- * - update_prompt: Update existing prompt (idempotent)
- * - delete_prompt: Delete prompt (idempotent)
+ * - update_prompt: Update existing prompt
+ * - delete_prompt: Delete prompt
  * - create_folder: Create new folder
  * - update_folder: Update folder
  * - delete_folder: Delete folder with safety checks
- * - backup_prompts: Export entire library as ZIP
- * - restore_prompts: Import library from backup
+ * - move_prompt: Move prompt between folders
  */
 
 import {
   Tool,
   TextContent,
-  ErrorContent,
 } from "@modelcontextprotocol/sdk/types.js";
-import { getQueueWriter } from "../core/queue-writer.js";
+import { getDatabaseAccessor } from "../core/database-accessor.js";
 import {
   validateCreatePromptInput,
   validateCreateFolderInput,
   validateUUID,
   validateString,
+  validatePromptContent,
+  validateEmojiOrNull,
+  validateColorOrNull,
+  validateURL,
+  validateUUIDOrNull,
   validateBooleanOrNull,
 } from "../validation/input-validator.js";
 import {
@@ -34,7 +38,6 @@ import {
   getErrorDetails,
 } from "../validation/error-taxonomy.js";
 import { getLogger } from "../observability/logger.js";
-import { OperationResult } from "../core/types.js";
 
 /**
  * Create prompt tool
@@ -86,25 +89,31 @@ export function createCreatePromptTool(): Tool {
 
 export async function handleCreatePrompt(
   input: unknown
-): Promise<TextContent | ErrorContent> {
+): Promise<TextContent> {
   const logger = getLogger();
   const timer = logger.startTimer();
 
   try {
     const validated = validateCreatePromptInput(input);
-    const queue = getQueueWriter();
-    const result = await queue.write("create_prompt", validated);
+    const db = getDatabaseAccessor();
+
+    // Create the prompt in the database
+    const promptId = db.createPrompt(validated);
 
     logger.logSuccess("create_prompt", timer(), {
+      promptId,
       titleLength: validated.title.length,
       contentLength: validated.content.length,
       hasFolder: validated.folderId !== null,
-      status: result.status,
     });
 
     return {
       type: "text",
-      text: JSON.stringify(result, null, 2),
+      text: JSON.stringify({
+        status: "success",
+        id: promptId,
+        message: `Prompt '${validated.title}' created successfully`,
+      }, null, 2),
     };
   } catch (error) {
     const duration = timer();
@@ -192,7 +201,7 @@ export function createUpdatePromptTool(): Tool {
 
 export async function handleUpdatePrompt(
   input: unknown
-): Promise<TextContent | ErrorContent> {
+): Promise<TextContent> {
   const logger = getLogger();
   const timer = logger.startTimer();
 
@@ -204,40 +213,50 @@ export async function handleUpdatePrompt(
     const obj = input as Record<string, unknown>;
     const id = validateUUID(obj.id);
 
-    const data: Record<string, unknown> = { id };
+    const updateData: Partial<{
+      title: string;
+      content: string;
+      folderId: any;
+      emoji: any;
+      color: any;
+      url: any;
+    }> = {};
 
-    // Optionally include only provided fields
+    // Optionally include only provided fields with proper validation
     if ("title" in obj && obj.title !== null) {
-      data.title = validateString(obj.title, "title", 1, 255);
+      updateData.title = validateString(obj.title, "title", 1, 255);
     }
     if ("content" in obj && obj.content !== null) {
-      data.content = validateString(obj.content, "content", 1, 100000);
+      updateData.content = validatePromptContent(obj.content);
     }
     if ("folderId" in obj) {
-      data.folderId = obj.folderId;
+      updateData.folderId = validateUUIDOrNull(obj.folderId);
     }
     if ("emoji" in obj) {
-      data.emoji = obj.emoji;
+      updateData.emoji = validateEmojiOrNull(obj.emoji);
     }
     if ("color" in obj) {
-      data.color = obj.color;
+      updateData.color = validateColorOrNull(obj.color);
     }
     if ("url" in obj) {
-      data.url = obj.url;
+      updateData.url = validateURL(obj.url);
     }
 
-    const queue = getQueueWriter();
-    const result = await queue.write("update_prompt", data);
+    const db = getDatabaseAccessor();
+    db.updatePrompt(id, updateData);
 
     logger.logSuccess("update_prompt", timer(), {
       promptId: id,
-      fieldsUpdated: Object.keys(data).length - 1,
-      status: result.status,
+      fieldsUpdated: Object.keys(updateData).length,
     });
 
     return {
       type: "text",
-      text: JSON.stringify(result, null, 2),
+      text: JSON.stringify({
+        status: "success",
+        id: id,
+        message: `Prompt updated successfully`,
+      }, null, 2),
     };
   } catch (error) {
     const duration = timer();
@@ -276,7 +295,7 @@ export async function handleUpdatePrompt(
 export function createDeletePromptTool(): Tool {
   return {
     name: "delete_prompt",
-    description: "Delete a prompt from your library",
+    description: "Delete a prompt from your library (requires explicit confirmation)",
     inputSchema: {
       type: "object",
       properties: {
@@ -285,8 +304,12 @@ export function createDeletePromptTool(): Tool {
           pattern: "^[a-f0-9-]{36}$",
           description: "Prompt ID to delete",
         },
+        confirmDelete: {
+          type: "boolean",
+          description: "Must be set to true to confirm deletion (safety measure)",
+        },
       },
-      required: ["id"],
+      required: ["id", "confirmDelete"],
       additionalProperties: false,
     },
   };
@@ -294,7 +317,7 @@ export function createDeletePromptTool(): Tool {
 
 export async function handleDeletePrompt(
   input: unknown
-): Promise<TextContent | ErrorContent> {
+): Promise<TextContent> {
   const logger = getLogger();
   const timer = logger.startTimer();
 
@@ -305,18 +328,30 @@ export async function handleDeletePrompt(
 
     const obj = input as Record<string, unknown>;
     const id = validateUUID(obj.id);
+    const confirmDelete = validateBooleanOrNull(obj.confirmDelete, false);
 
-    const queue = getQueueWriter();
-    const result = await queue.write("delete_prompt", { id });
+    // Require explicit confirmation to prevent accidental deletions
+    if (!confirmDelete) {
+      throw new PromptekaMCPError(
+        ErrorCodes.INVALID_INPUT,
+        "Deletion requires explicit confirmation. Set confirmDelete to true to proceed."
+      );
+    }
+
+    const db = getDatabaseAccessor();
+    db.deletePrompt(id);
 
     logger.logSuccess("delete_prompt", timer(), {
       promptId: id,
-      status: result.status,
     });
 
     return {
       type: "text",
-      text: JSON.stringify(result, null, 2),
+      text: JSON.stringify({
+        status: "success",
+        id: id,
+        message: "Prompt deleted successfully",
+      }, null, 2),
     };
   } catch (error) {
     const duration = timer();
@@ -388,23 +423,29 @@ export function createCreateFolderTool(): Tool {
 
 export async function handleCreateFolder(
   input: unknown
-): Promise<TextContent | ErrorContent> {
+): Promise<TextContent> {
   const logger = getLogger();
   const timer = logger.startTimer();
 
   try {
     const validated = validateCreateFolderInput(input);
-    const queue = getQueueWriter();
-    const result = await queue.write("create_folder", validated);
+    const db = getDatabaseAccessor();
+
+    // Create the folder in the database
+    const folderId = db.createFolder(validated);
 
     logger.logSuccess("create_folder", timer(), {
+      folderId,
       folderName: validated.name,
-      status: result.status,
     });
 
     return {
       type: "text",
-      text: JSON.stringify(result, null, 2),
+      text: JSON.stringify({
+        status: "success",
+        id: folderId,
+        message: `Folder '${validated.name}' created successfully`,
+      }, null, 2),
     };
   } catch (error) {
     const duration = timer();
@@ -481,7 +522,7 @@ export function createUpdateFolderTool(): Tool {
 
 export async function handleUpdateFolder(
   input: unknown
-): Promise<TextContent | ErrorContent> {
+): Promise<TextContent> {
   const logger = getLogger();
   const timer = logger.startTimer();
 
@@ -493,32 +534,42 @@ export async function handleUpdateFolder(
     const obj = input as Record<string, unknown>;
     const id = validateUUID(obj.id);
 
-    const data: Record<string, unknown> = { id };
+    const updateData: Partial<{
+      name: string;
+      parentId: any;
+      emoji: any;
+      color: any;
+    }> = {};
 
+    // Optionally include only provided fields with proper validation
     if ("name" in obj && obj.name !== null) {
-      data.name = validateString(obj.name, "name", 1, 255);
+      updateData.name = validateString(obj.name, "name", 1, 255);
     }
     if ("parentId" in obj) {
-      data.parentId = obj.parentId;
+      updateData.parentId = validateUUIDOrNull(obj.parentId);
     }
     if ("emoji" in obj) {
-      data.emoji = obj.emoji;
+      updateData.emoji = validateEmojiOrNull(obj.emoji);
     }
     if ("color" in obj) {
-      data.color = obj.color;
+      updateData.color = validateColorOrNull(obj.color);
     }
 
-    const queue = getQueueWriter();
-    const result = await queue.write("update_folder", data);
+    const db = getDatabaseAccessor();
+    db.updateFolder(id, updateData);
 
     logger.logSuccess("update_folder", timer(), {
       folderId: id,
-      status: result.status,
+      fieldsUpdated: Object.keys(updateData).length,
     });
 
     return {
       type: "text",
-      text: JSON.stringify(result, null, 2),
+      text: JSON.stringify({
+        status: "success",
+        id: id,
+        message: "Folder updated successfully",
+      }, null, 2),
     };
   } catch (error) {
     const duration = timer();
@@ -557,7 +608,7 @@ export async function handleUpdateFolder(
 export function createDeleteFolderTool(): Tool {
   return {
     name: "delete_folder",
-    description: "Delete a folder from your library",
+    description: "Delete a folder from your library (requires explicit confirmation)",
     inputSchema: {
       type: "object",
       properties: {
@@ -571,8 +622,12 @@ export function createDeleteFolderTool(): Tool {
           default: false,
           description: "Delete folder and all contents (default: false)",
         },
+        confirmDelete: {
+          type: "boolean",
+          description: "Must be set to true to confirm deletion (safety measure)",
+        },
       },
-      required: ["id"],
+      required: ["id", "confirmDelete"],
       additionalProperties: false,
     },
   };
@@ -580,7 +635,7 @@ export function createDeleteFolderTool(): Tool {
 
 export async function handleDeleteFolder(
   input: unknown
-): Promise<TextContent | ErrorContent> {
+): Promise<TextContent> {
   const logger = getLogger();
   const timer = logger.startTimer();
 
@@ -592,19 +647,31 @@ export async function handleDeleteFolder(
     const obj = input as Record<string, unknown>;
     const id = validateUUID(obj.id);
     const recursive = validateBooleanOrNull(obj.recursive, false);
+    const confirmDelete = validateBooleanOrNull(obj.confirmDelete, false);
 
-    const queue = getQueueWriter();
-    const result = await queue.write("delete_folder", { id, recursive });
+    // Require explicit confirmation to prevent accidental deletions
+    if (!confirmDelete) {
+      throw new PromptekaMCPError(
+        ErrorCodes.INVALID_INPUT,
+        "Deletion requires explicit confirmation. Set confirmDelete to true to proceed."
+      );
+    }
+
+    const db = getDatabaseAccessor();
+    db.deleteFolder(id, recursive);
 
     logger.logSuccess("delete_folder", timer(), {
       folderId: id,
       recursive,
-      status: result.status,
     });
 
     return {
       type: "text",
-      text: JSON.stringify(result, null, 2),
+      text: JSON.stringify({
+        status: "success",
+        id: id,
+        message: "Folder deleted successfully",
+      }, null, 2),
     };
   } catch (error) {
     const duration = timer();
@@ -638,84 +705,6 @@ export async function handleDeleteFolder(
 }
 
 /**
- * Backup prompts tool
- */
-export function createBackupPromptsTool(): Tool {
-  return {
-    name: "backup_prompts",
-    description: "Export your entire prompt library as a backup ZIP file",
-    inputSchema: {
-      type: "object",
-      properties: {
-        includeMetadata: {
-          type: "boolean",
-          default: true,
-          description: "Include folder structure and metadata (default: true)",
-        },
-      },
-      additionalProperties: false,
-    },
-  };
-}
-
-export async function handleBackupPrompts(
-  input: unknown
-): Promise<TextContent | ErrorContent> {
-  const logger = getLogger();
-  const timer = logger.startTimer();
-
-  try {
-    if (typeof input !== "object" || input === null) {
-      throw new PromptekaMCPError(ErrorCodes.INVALID_INPUT, "Input must be an object");
-    }
-
-    const obj = input as Record<string, unknown>;
-    const includeMetadata = validateBooleanOrNull(obj.includeMetadata, true);
-
-    const queue = getQueueWriter();
-    const result = await queue.write("backup_prompts", { includeMetadata });
-
-    logger.logSuccess("backup_prompts", timer(), {
-      includeMetadata,
-      status: result.status,
-    });
-
-    return {
-      type: "text",
-      text: JSON.stringify(result, null, 2),
-    };
-  } catch (error) {
-    const duration = timer();
-
-    if (error instanceof PromptekaMCPError) {
-      const details = getErrorDetails(error.code);
-      logger.logError("backup_prompts", error.code, duration, error.message);
-
-      return {
-        type: "text",
-        text: JSON.stringify({
-          status: "error",
-          error: error.code,
-          message: details.userFacingMessage,
-        }),
-      };
-    }
-
-    const message = error instanceof Error ? error.message : "Unknown error";
-    logger.logError("backup_prompts", ErrorCodes.INTERNAL_ERROR, duration, message);
-
-    return {
-      type: "text",
-      text: JSON.stringify({
-        status: "error",
-        error: ErrorCodes.INTERNAL_ERROR,
-        message: "Failed to create backup",
-      }),
-    };
-  }
-}
-
-/**
  * Move prompt tool
  */
 export function createMovePromptTool(): Tool {
@@ -743,7 +732,7 @@ export function createMovePromptTool(): Tool {
 
 export async function handleMovePrompt(
   input: unknown
-): Promise<TextContent | ErrorContent> {
+): Promise<TextContent> {
   const logger = getLogger();
   const timer = logger.startTimer();
 
@@ -754,23 +743,24 @@ export async function handleMovePrompt(
 
     const obj = input as Record<string, unknown>;
     const promptId = validateUUID(obj.promptId);
-    const targetFolderId = obj.targetFolderId; // Can be null for root
+    const targetFolderId = validateUUIDOrNull(obj.targetFolderId);
 
-    const queue = getQueueWriter();
-    const result = await queue.write("move_prompt", {
-      promptId,
-      targetFolderId,
-    });
+    const db = getDatabaseAccessor();
+    db.movePrompt(promptId, targetFolderId);
 
     logger.logSuccess("move_prompt", timer(), {
       promptId,
       targetFolderId,
-      status: result.status,
     });
 
     return {
       type: "text",
-      text: JSON.stringify(result, null, 2),
+      text: JSON.stringify({
+        status: "success",
+        promptId: promptId,
+        targetFolderId: targetFolderId,
+        message: "Prompt moved successfully",
+      }, null, 2),
     };
   } catch (error) {
     const duration = timer();
@@ -803,191 +793,3 @@ export async function handleMovePrompt(
   }
 }
 
-/**
- * Export prompts tool
- */
-export function createExportPromptsTool(): Tool {
-  return {
-    name: "export_prompts",
-    description: "Export prompts to various formats (JSON, CSV, Markdown)",
-    inputSchema: {
-      type: "object",
-      properties: {
-        format: {
-          type: "string",
-          enum: ["json", "csv", "markdown"],
-          default: "json",
-          description: "Export format",
-        },
-        folderId: {
-          type: ["string", "null"],
-          description: "Export only from specific folder (optional)",
-        },
-        includeMetadata: {
-          type: "boolean",
-          default: true,
-          description: "Include folder structure and metadata",
-        },
-      },
-      additionalProperties: false,
-    },
-  };
-}
-
-export async function handleExportPrompts(
-  input: unknown
-): Promise<TextContent | ErrorContent> {
-  const logger = getLogger();
-  const timer = logger.startTimer();
-
-  try {
-    if (typeof input !== "object" || input === null) {
-      throw new PromptekaMCPError(ErrorCodes.INVALID_INPUT, "Input must be an object");
-    }
-
-    const obj = input as Record<string, unknown>;
-    const format = (obj.format as string) || "json";
-    const folderId = obj.folderId;
-    const includeMetadata = validateBooleanOrNull(obj.includeMetadata, true);
-
-    // Validate format
-    if (!["json", "csv", "markdown"].includes(format)) {
-      throw new PromptekaMCPError(
-        ErrorCodes.INVALID_INPUT,
-        "Format must be: json, csv, or markdown"
-      );
-    }
-
-    const queue = getQueueWriter();
-    const result = await queue.write("export_prompts", {
-      format,
-      folderId,
-      includeMetadata,
-    });
-
-    logger.logSuccess("export_prompts", timer(), {
-      format,
-      hasFolderFilter: folderId !== null && folderId !== undefined,
-      includeMetadata,
-      status: result.status,
-    });
-
-    return {
-      type: "text",
-      text: JSON.stringify(result, null, 2),
-    };
-  } catch (error) {
-    const duration = timer();
-
-    if (error instanceof PromptekaMCPError) {
-      const details = getErrorDetails(error.code);
-      logger.logError("export_prompts", error.code, duration, error.message);
-
-      return {
-        type: "text",
-        text: JSON.stringify({
-          status: "error",
-          error: error.code,
-          message: details.userFacingMessage,
-        }),
-      };
-    }
-
-    const message = error instanceof Error ? error.message : "Unknown error";
-    logger.logError("export_prompts", ErrorCodes.INTERNAL_ERROR, duration, message);
-
-    return {
-      type: "text",
-      text: JSON.stringify({
-        status: "error",
-        error: ErrorCodes.INTERNAL_ERROR,
-        message: "Failed to export prompts",
-      }),
-    };
-  }
-}
-
-/**
- * Restore prompts tool
- */
-export function createRestorePromptsTool(): Tool {
-  return {
-    name: "restore_prompts",
-    description: "Import a previously exported prompt library backup",
-    inputSchema: {
-      type: "object",
-      properties: {
-        backupPath: {
-          type: "string",
-          description: "Path to backup ZIP file",
-        },
-        overwrite: {
-          type: "boolean",
-          default: false,
-          description: "Overwrite conflicting prompts (default: false, merge)",
-        },
-      },
-      required: ["backupPath"],
-      additionalProperties: false,
-    },
-  };
-}
-
-export async function handleRestorePrompts(
-  input: unknown
-): Promise<TextContent | ErrorContent> {
-  const logger = getLogger();
-  const timer = logger.startTimer();
-
-  try {
-    if (typeof input !== "object" || input === null) {
-      throw new PromptekaMCPError(ErrorCodes.INVALID_INPUT, "Input must be an object");
-    }
-
-    const obj = input as Record<string, unknown>;
-    const backupPath = validateString(obj.backupPath, "backupPath", 1, 1024);
-    const overwrite = validateBooleanOrNull(obj.overwrite, false);
-
-    const queue = getQueueWriter();
-    const result = await queue.write("restore_prompts", { backupPath, overwrite });
-
-    logger.logSuccess("restore_prompts", timer(), {
-      backupPath,
-      overwrite,
-      status: result.status,
-    });
-
-    return {
-      type: "text",
-      text: JSON.stringify(result, null, 2),
-    };
-  } catch (error) {
-    const duration = timer();
-
-    if (error instanceof PromptekaMCPError) {
-      const details = getErrorDetails(error.code);
-      logger.logError("restore_prompts", error.code, duration, error.message);
-
-      return {
-        type: "text",
-        text: JSON.stringify({
-          status: "error",
-          error: error.code,
-          message: details.userFacingMessage,
-        }),
-      };
-    }
-
-    const message = error instanceof Error ? error.message : "Unknown error";
-    logger.logError("restore_prompts", ErrorCodes.INTERNAL_ERROR, duration, message);
-
-    return {
-      type: "text",
-      text: JSON.stringify({
-        status: "error",
-        error: ErrorCodes.INTERNAL_ERROR,
-        message: "Failed to restore backup",
-      }),
-    };
-  }
-}

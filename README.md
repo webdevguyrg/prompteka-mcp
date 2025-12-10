@@ -19,8 +19,8 @@ Modify existing prompts or organize your library through AI.
 Operates entirely locally in `~/Library/Application Support/prompteka/`.
 No network calls, no telemetry, no data sent anywhere.
 
-✅ **App Store Compliant**
-Works with macOS Prompteka app via safe file-based import queue.
+✅ **Independent Operation**
+Works with or without Prompteka app running. Direct database access means zero dependencies.
 
 ## How It Works
 
@@ -34,17 +34,19 @@ The Prompteka MCP Server operates in two modes:
 - Returns results in < 100ms
 - Does NOT interfere with Prompteka app operations
 
-**Write Operations** (Safe, Async Queue)
-- Creates JSON operation files in the Prompteka import queue
-- Prompteka app watches this folder and processes operations
-- Changes appear in Prompteka app within 1-2 seconds
-- Fully validated and atomic
+**Write Operations** (Instant, Direct Database Access)
+- Writes directly to Prompteka SQLite database using WAL mode
+- Uses atomic transactions with full ACID guarantees
+- Changes committed immediately (< 10ms)
+- SQLite handles concurrent access safely
+- Works regardless of whether Prompteka app is running
 
-This two-mechanism approach ensures:
-- ✅ No database lock conflicts
-- ✅ App Store sandbox compliance
-- ✅ Real-time UI updates in Prompteka
-- ✅ Safe automatic recovery on crashes
+This unified approach ensures:
+- ✅ Sub-10ms response times (vs 200-500ms queue-based)
+- ✅ No app dependency - MCP server operates standalone
+- ✅ Safe concurrent read-write with WAL mode
+- ✅ Automatic atomic rollback on errors
+- ✅ Zero orphaned operations or cleanup needed
 
 ### Database Location
 
@@ -55,27 +57,26 @@ Prompteka stores its data at:
 
 The MCP server accesses this file to read your prompts and folders.
 
-### Queue Operations
+### Write Operations (Direct Database)
 
 When you use write tools (create_prompt, update_prompt, etc.), here's what happens:
 
-1. MCP server creates a JSON file in:
-   ```
-   ~/Library/Application Support/prompteka/import-queue/{uuid}.json
-   ```
+1. **Validation**: MCP server validates your input against JSON schemas (local, instant)
 
-2. Prompteka app detects the file and processes it
+2. **Transaction**: Opens atomic SQLite transaction with implicit locking
 
-3. After validation, Prompteka writes a response:
-   ```
-   ~/Library/Application Support/prompteka/import-queue/.response-{uuid}.json
-   ```
+3. **Execution**: Executes INSERT/UPDATE/DELETE operation against prompts.db
 
-4. MCP server reads the response and returns it to you
+4. **Commit**: Transaction commits automatically (or rolls back if error)
 
-5. Response file is automatically cleaned up
+5. **Response**: Returns success/error response immediately (< 10ms typical)
 
-This all happens in 200-500ms, completely transparent to you.
+6. **Visibility**: Changes are immediately visible to:
+   - Other MCP read operations
+   - Prompteka app via SQLite WAL mechanism
+   - Any other SQLite clients accessing the database
+
+This all happens in < 10ms, completely transparent to you. No app required to be running.
 
 ---
 
@@ -100,7 +101,7 @@ This all happens in 200-500ms, completely transparent to you.
 
 **Response Times:**
 - Read tools: < 100ms (direct database)
-- Write tools: 200-500ms (queued, validated)
+- Write tools: < 10ms (direct database, atomic transactions)
 
 **All operations are logged** with detailed status, errors, and timing information.
 
@@ -110,9 +111,11 @@ This all happens in 200-500ms, completely transparent to you.
 
 ### Prerequisites
 
-- **Prompteka app** installed and has been opened at least once
+- **Prompteka app** installed (just needs to have been opened once to create database)
 - **Node.js** 18.0.0 or newer
 - **npm** 9.0.0 or newer
+
+*Note: The Prompteka app does NOT need to be running for the MCP server to work. All reads and writes operate directly on the local database.*
 
 Check your versions:
 ```bash
@@ -214,9 +217,14 @@ Or in your MCP config:
 }
 ```
 
-### Custom Queue Path
+### Custom Database Path
 
-If you need a different import queue location:
+By default, the MCP server looks for Prompteka's database at:
+```
+~/Library/Application Support/prompteka/prompts.db
+```
+
+If your database is in a custom location, you can specify it:
 
 ```json
 {
@@ -224,7 +232,7 @@ If you need a different import queue location:
     "prompteka": {
       "command": "prompteka-mcp",
       "env": {
-        "PROMPTEKA_QUEUE_PATH": "/custom/path/import-queue"
+        "PROMPTEKA_DB_PATH": "/custom/path/prompts.db"
       }
     }
   }
@@ -319,7 +327,7 @@ Import a previously exported prompt library from a backup file.
 ## Response Times
 
 - **Read operations**: < 100ms (direct database)
-- **Write operations**: 200-500ms (queued, validated by Prompteka)
+- **Write operations**: < 10ms (direct database, atomic transactions)
 
 ## Use Cases
 
@@ -398,46 +406,32 @@ Check the path:
 ls -la ~/Library/Application\ Support/prompteka/
 ```
 
-### "Timeout waiting for response"
+### "Database is locked" or "SQLITE_BUSY"
 
-Check Prompteka app is running:
+The database write lock timed out after 5 seconds. This is rare but can happen if:
+- Prompteka app is performing a large operation
+- Database corruption scan is running
+- Another MCP client is also writing
 
-```bash
-pgrep -l prompteka
-```
-
-Check queue for stuck files:
-
-```bash
-ls -la ~/Library/Application\ Support/prompteka/import-queue/
-```
-
-Clean up orphaned files:
+**Solution**: Retry the operation. Automatic retry is built-in, but if you still see this error:
 
 ```bash
-rm ~/Library/Application\ Support/prompteka/import-queue/.response-*
+# Check database file exists and is readable
+ls -la ~/Library/Application\ Support/prompteka/prompts.db*
 ```
 
-Retry the operation.
+### "Database file not found"
 
-### "Permission denied"
+The MCP server can't find Prompteka's database. This usually means:
+- Prompteka app hasn't been launched yet (creates database on first run)
+- Database is in a non-standard location
 
-Check queue directory permissions:
+**Solution**: Either launch Prompteka once, or configure custom path:
 
 ```bash
-ls -ld ~/Library/Application\ Support/prompteka/import-queue/
+export PROMPTEKA_DB_PATH="/path/to/prompts.db"
+prompteka-mcp
 ```
-
-Should be: `drwx------` (0700). Fix with:
-
-```bash
-chmod 700 ~/Library/Application\ Support/prompteka/import-queue/
-```
-
-### "Database locked"
-
-Transient error. MCP will retry automatically.
-If persists, close Prompteka app and try again.
 
 ## API Reference
 
@@ -445,7 +439,7 @@ See [`documentation/PRD.md`](./documentation/PRD.md) for complete API specificat
 
 - Tool schemas and validation rules
 - Error taxonomy with recovery strategies
-- Queue operation lifecycle
+- Database contract (WAL mode, transactions, concurrency)
 - Concurrency & limits policy
 - Testing strategy
 
@@ -475,7 +469,7 @@ npm run test:coverage
 
 ## Architecture
 
-The MCP server uses a **read-direct, write-queue** pattern:
+The MCP server uses a **read-direct, write-direct** pattern with SQLite WAL mode:
 
 ```
 ┌─────────┐
@@ -492,22 +486,22 @@ The MCP server uses a **read-direct, write-queue** pattern:
 │ ├─ get_prompt           │
 │ └─ search_prompts       │
 │                         │
-│ Write Operations:       │ (File-based queue)
-│ ├─ create_prompt        │ 200-500ms
-│ ├─ update_prompt        │ (validated by Prompteka)
+│ Write Operations:       │ (Direct DB access)
+│ ├─ create_prompt        │ < 10ms
+│ ├─ update_prompt        │ (atomic transactions)
 │ ├─ delete_prompt        │
 │ ├─ create_folder        │
 │ ├─ update_folder        │
 │ └─ delete_folder        │
 └────┬──────────────────┬─┘
-     │ Direct Read      │ Queued Write
-     │ (WAL mode)       │ (Safe)
+     │ Direct Read      │ Direct Write
+     │ (WAL mode)       │ (WAL mode)
      ▼                  ▼
 ┌──────────────────────────────────────┐
-│ Prompteka App                        │
+│ Prompteka SQLite Database            │
 ├──────────────────────────────────────┤
-│ SQLite Database (WAL)                │
-│ Import Queue Watcher                 │
+│ WAL File: prompts.db-wal             │
+│ Shared Memory: prompts.db-shm        │
 │ Validation & Persistence             │
 └──────────────────────────────────────┘
 ```

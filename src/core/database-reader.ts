@@ -15,7 +15,7 @@ import Database from "better-sqlite3";
 import path from "path";
 import fs from "fs";
 import os from "os";
-import { Folder, Prompt, UUID } from "./types.js";
+import { Folder, Prompt, UUID, Emoji, PromptColor } from "./types.js";
 import { PromptekaMCPError, ErrorCodes } from "../validation/error-taxonomy.js";
 import { getLogger } from "../observability/logger.js";
 
@@ -185,11 +185,11 @@ export class PromptekaDatabaseReader {
       }>;
 
       return folders.map((f) => ({
-        id: f.id,
+        id: f.id as UUID,
         name: f.name,
-        parentId: f.parentId,
-        emoji: f.emoji,
-        color: f.color as any,
+        parentId: f.parentId as UUID | null | undefined,
+        emoji: f.emoji as Emoji | null | undefined,
+        color: f.color as PromptColor | null | undefined,
         createdAt: f.createdAt,
         updatedAt: f.updatedAt,
       }));
@@ -266,12 +266,12 @@ export class PromptekaDatabaseReader {
 
       return {
         prompts: prompts.map((p) => ({
-          id: p.id,
+          id: p.id as UUID,
           title: p.title,
           content: p.content,
-          folderId: p.folderId,
-          emoji: p.emoji,
-          color: p.color as any,
+          folderId: p.folderId as UUID | null | undefined,
+          emoji: p.emoji as Emoji | null | undefined,
+          color: p.color as PromptColor | null | undefined,
           url: p.url,
           createdAt: p.createdAt,
           updatedAt: p.updatedAt,
@@ -327,12 +327,12 @@ export class PromptekaDatabaseReader {
       }
 
       return {
-        id: prompt.id,
+        id: prompt.id as UUID,
         title: prompt.title,
         content: prompt.content,
-        folderId: prompt.folderId,
-        emoji: prompt.emoji,
-        color: prompt.color as any,
+        folderId: prompt.folderId as UUID | null | undefined,
+        emoji: prompt.emoji as Emoji | null | undefined,
+        color: prompt.color as PromptColor | null | undefined,
         url: prompt.url,
         createdAt: prompt.createdAt,
         updatedAt: prompt.updatedAt,
@@ -453,12 +453,12 @@ export class PromptekaDatabaseReader {
 
       return {
         prompts: prompts.map((p) => ({
-          id: p.id,
+          id: p.id as UUID,
           title: p.title,
           content: p.content,
-          folderId: p.folderId,
-          emoji: p.emoji,
-          color: p.color as any,
+          folderId: p.folderId as UUID | null | undefined,
+          emoji: p.emoji as Emoji | null | undefined,
+          color: p.color as PromptColor | null | undefined,
           url: p.url,
           createdAt: p.createdAt,
           updatedAt: p.updatedAt,

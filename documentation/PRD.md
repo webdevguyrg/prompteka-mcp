@@ -1,6 +1,6 @@
-# Prompteka MCP Server - Product Requirements Document v3
+# Prompteka MCP Server - Product Requirements Document v4
 
-**Status**: MVP Phase (Read-Only → Queued Writes)
+**Status**: MVP Phase (Full Read-Write Direct DB Access)
 **Updated**: December 9, 2025
 **Protocol Version**: 1.0
 
@@ -8,9 +8,9 @@
 
 ## Overview
 
-An MCP (Model Context Protocol) server providing AI assistants with full access to Prompteka's prompt library via two mechanisms:
-- **Reads** (4 tools): Direct SQLite database access (fast, < 100ms)
-- **Writes** (10 tools): File-based import queue (safe, async, Prompteka-validated)
+An MCP (Model Context Protocol) server providing AI assistants with full access to Prompteka's prompt library via direct SQLite database access:
+- **Reads** (4 tools): Direct SQLite database access (fast, < 100ms, no app required)
+- **Writes** (10 tools): Direct SQLite database writes using WAL mode (immediate, < 10ms, no app required)
 
 **14 Total Tools**:
 - **Read-Only**: list_folders, list_prompts, get_prompt, search_prompts
@@ -29,32 +29,26 @@ Enables: "Save this prompt to my Security folder", "Move all testing prompts to 
 AI Assistant
     ↓ (MCP Protocol)
 MCP Server
-    ├→ listFolders() → Direct DB Read ← Prompteka SQLite
-    ├→ listPrompts() → Direct DB Read ← Prompteka SQLite
-    ├→ createPrompt() → Write JSON File → ~/Library/Application Support/prompteka/import-queue/
-    ├→ updatePrompt() → Write JSON File → import-queue/
-    └→ deletePrompt() → Write JSON File → import-queue/
-         ↓ (File System Events)
-    Prompteka App (watches queue)
-         ↓ (Validates, updates DB)
-    User sees changes in 100-500ms
+    ├→ listFolders() → Direct SQLite Read (< 100ms) ← Prompteka SQLite
+    ├→ listPrompts() → Direct SQLite Read (< 100ms) ← Prompteka SQLite
+    ├→ createPrompt() → Direct SQLite Write (< 10ms) ← Prompteka SQLite (WAL mode)
+    ├→ updatePrompt() → Direct SQLite Write (< 10ms) ← Prompteka SQLite (WAL mode)
+    └→ deletePrompt() → Direct SQLite Write (< 10ms) ← Prompteka SQLite (WAL mode)
+
+Note: Changes are immediately visible to the Prompteka app via SQLite's WAL mechanism.
+No async queue, no file watching, no response polling - everything is synchronous and instant.
+The Prompteka app can run concurrently without conflicts, locks, or corruption risk.
 ```
 
 ### Directory Structure
 
 ```
 ~/Library/Application Support/prompteka/
-├── prompts.db                    # SQLite database (opened read-only by MCP)
-├── prompts.db-wal                # WAL file (safe concurrent access)
-├── prompts.db-shm                # WAL shared memory
-└── import-queue/                 # Write queue (MCP writes here)
-    ├── {uuid}.json               # Pending operation
-    ├── .response-{uuid}.json     # Response from Prompteka (after processing)
-    ├── processed/
-    │   └── {uuid}.json           # Completed successfully
-    └── failed/
-        ├── {uuid}.json           # Failed with error
-        └── {uuid}.error          # Error details (text file)
+├── prompts.db                    # SQLite database (read-write by MCP, WAL mode enabled)
+├── prompts.db-wal                # WAL file (enables concurrent read-write access)
+├── prompts.db-shm                # WAL shared memory (SQLite internal)
+└── import-queue/                 # DEPRECATED: No longer used by MCP server
+    └── (maintained by Prompteka app for other use cases)
 ```
 
 ---
@@ -219,14 +213,14 @@ All tools follow this contract:
 
 ---
 
-#### Write Tools (File-Based Queue, Async Response)
+#### Write Tools (Direct SQLite, Synchronous Response)
 
 All write tools follow this pattern:
 1. Validate input locally
-2. Generate operation UUID
-3. Write to `import-queue/{uuid}.json` (atomic: temp + rename)
-4. Wait max 5 seconds for `.response-{uuid}.json`
-5. Return response or timeout error
+2. Acquire database write lock (serialized by SQLite)
+3. Execute atomic operation in transaction
+4. Return success response immediately (< 10ms typical)
+5. Changes visible to all readers via WAL mode
 
 ##### `create_prompt`
 
@@ -262,7 +256,7 @@ All write tools follow this pattern:
 }
 ```
 
-**Timeout**: 5 seconds (total wait for response file)
+**Response Time**: < 10ms (synchronous)
 **Errors**: See error taxonomy below
 
 ---
@@ -289,8 +283,7 @@ All write tools follow this pattern:
 
 **Response**: Same as create_prompt
 
-**Timeout**: 5 seconds
-**Idempotency**: Same ID sent twice = first succeeds, second returns "already updated" (safe)
+**Response Time**: < 10ms (synchronous)
 **Errors**: `VALIDATION_ERROR`, `PROMPT_NOT_FOUND`, `FOLDER_NOT_FOUND`, `DATABASE_ERROR`, `INVALID_EMOJI`, `INVALID_COLOR`
 
 ---
@@ -323,8 +316,7 @@ All write tools follow this pattern:
 }
 ```
 
-**Timeout**: 5 seconds
-**Idempotency**: Deleting non-existent prompt = success (safe)
+**Response Time**: < 10ms (synchronous)
 **Errors**: `DATABASE_ERROR`
 
 ---
@@ -348,7 +340,7 @@ All write tools follow this pattern:
 
 **Response**: Same as create_prompt (includes folder ID on success)
 
-**Timeout**: 5 seconds
+**Response Time**: < 10ms (synchronous)
 **Errors**: `VALIDATION_ERROR`, `PARENT_FOLDER_NOT_FOUND`, `DATABASE_ERROR`, `INVALID_EMOJI`, `INVALID_COLOR`
 
 ---
@@ -373,7 +365,7 @@ All write tools follow this pattern:
 
 **Response**: Same as create_folder
 
-**Timeout**: 5 seconds
+**Response Time**: < 10ms (synchronous)
 **Errors**: `VALIDATION_ERROR`, `FOLDER_NOT_FOUND`, `PARENT_FOLDER_NOT_FOUND`, `DATABASE_ERROR`, `INVALID_EMOJI`, `INVALID_COLOR`
 
 ---
@@ -395,90 +387,69 @@ All write tools follow this pattern:
 
 **Response**: Same as create_folder
 
-**Timeout**: 5 seconds
+**Response Time**: < 10ms (synchronous)
 **Safety**: If `recursive=false` and folder has prompts/subfolders, returns error
 **Errors**: `FOLDER_NOT_FOUND`, `FOLDER_NOT_EMPTY`, `DATABASE_ERROR`
 
 ---
 
-## Queue Contract
+## Database Contract (Direct SQLite Access)
 
-### Write Operation File Format
+### Write Operation Mechanism
 
-**Location**: `~/Library/Application Support/prompteka/import-queue/{uuid}.json`
+**DEPRECATED**: Previous version used file-based queue. Current version uses direct SQLite writes.
 
-**Schema**:
-```json
-{
-  "id": "550e8400-e29b-41d4-a716-446655440000",
-  "operation": "create_prompt",
-  "timestamp": "2025-12-09T10:30:45.123Z",
-  "data": {
-    "title": "Security Review",
-    "content": "Review for...",
-    "folderId": "550e8400-e29b-41d4-a716-446655440001"
-  }
-}
-```
+**Current Approach**: All write operations execute directly against the Prompteka SQLite database using WAL mode for safe concurrent access.
 
-**Requirements**:
-- `id`: UUIDv4, unique per operation
-- `operation`: One of: `create_prompt`, `update_prompt`, `delete_prompt`, `create_folder`, `update_folder`, `delete_folder`
-- `timestamp`: ISO 8601 with milliseconds
-- `data`: Operation-specific payload (matches tool input schema)
-- **Max file size**: 1 MB
+**Benefits**:
+- Immediate responses (< 10ms vs 200-500ms)
+- No app dependency - works standalone
+- No queue polling or file system watching
+- Atomic ACID transactions
+- Safe concurrent read-write with Prompteka app
 
-### Write Operation Lifecycle
+**Database Access**:
+- **Location**: `~/Library/Application Support/prompteka/prompts.db`
+- **Mode**: WAL (Write-Ahead Logging) enabled
+- **Concurrent Access**: Readers don't block writers, writers serialize automatically
+- **Lock Timeout**: SQLite SQLITE_BUSY retry up to 5 seconds
+- **Rollback**: Automatic on validation error (no partial writes)
 
-| Step | Actor | Action | Timeout | Notes |
-|------|-------|--------|---------|-------|
-| 1 | MCP | Write `.{uuid}.tmp` with operation JSON | N/A | Atomic: temp file + rename |
-| 2 | MCP | Rename `.{uuid}.tmp` → `{uuid}.json` | N/A | Now visible to Prompteka |
-| 3 | Prompteka | Detect `{uuid}.json` (file watcher) | - | Within 100ms typically |
-| 4 | Prompteka | Read, validate, execute operation | 2s | Logs errors internally |
-| 5 | Prompteka | Write `.response-{uuid}.json` with result | 2s | Response file (see below) |
-| 6 | Prompteka | Move `{uuid}.json` to `processed/` or `failed/` | 1s | Marks complete |
-| 7 | MCP | Poll for `.response-{uuid}.json` | 5s total | Return once found or timeout |
-| 8 | MCP | Clean up response file | N/A | Delete after reading |
+### Transaction Isolation & Consistency
 
-### Response File Format
+**ACID Guarantees**:
+- **Atomicity**: Operation succeeds or fails completely (no partial updates)
+- **Consistency**: Database is always in valid state (constraints enforced)
+- **Isolation**: Concurrent reads don't see uncommitted writes (SQLite snapshot isolation)
+- **Durability**: Committed changes survive crashes (fsync to disk)
 
-**Location**: `~/Library/Application Support/prompteka/import-queue/.response-{uuid}.json`
+**Write Sequence**:
+1. Validate input against JSON schemas (immediate error if invalid)
+2. BEGIN TRANSACTION
+3. Check foreign key constraints (e.g., folder exists)
+4. Execute INSERT/UPDATE/DELETE operation
+5. COMMIT TRANSACTION (or automatic ROLLBACK if error)
+6. Return response (< 10ms total)
 
-**Success Response**:
-```json
-{
-  "status": "success",
-  "id": "new-prompt-uuid",
-  "message": "Prompt 'Security Review' created successfully"
-}
-```
+**Error Handling**:
+- Validation errors: No transaction, return immediately with error code
+- Database errors (locked): Retry up to 5 seconds with exponential backoff
+- Constraint violations: ROLLBACK transaction, return `CONSTRAINT_VIOLATION` error
+- Corruption: Very rare with WAL mode, return `DATABASE_ERROR` and log details
 
-**Error Response**:
-```json
-{
-  "status": "error",
-  "error": "FOLDER_NOT_FOUND",
-  "message": "Folder 550e8400-e29b-41d4-a716-446655440001 does not exist"
-}
-```
+### Concurrency Model
 
-### Retry & Cleanup Policy
+**Reader-Writer Compatibility**:
+- Multiple readers: Simultaneous, never blocked
+- Writer + readers: Readers use snapshot, writer proceeds
+- Multiple writers: Serialized by SQLite (one at a time)
+- Deadlocks: Impossible (SQLite serializes writes)
 
-**MCP Server Retries** (for write operations):
-- Initial attempt: write file
-- Wait up to 5 seconds for response
-- If timeout: retry up to 2 more times with 1s backoff
-- If all retries fail: return error to client
-
-**Prompteka Cleanup** (daily):
-- Delete `processed/{uuid}.json` files older than 7 days
-- Keep `failed/{uuid}.json` indefinitely (user inspection)
-- Keep `.response-{uuid}.json` until operation moved (then delete)
-
-**MCP Cleanup** (on startup):
-- Delete `.response-{uuid}.json` older than 24 hours (orphaned responses)
-- Log count of orphaned files
+**WAL Mode Benefits**:
+- Readers use "-wal" file, writers use main file
+- No checkpoint blocking (async background writer)
+- Power failure safe (WAL journal keeps consistency)
+- Better performance for concurrent access
 
 ---
 
@@ -789,7 +760,7 @@ AI: get_prompt(id)
 }
 ```
 
-**Timeout**: 5 seconds
+**Response Time**: < 10ms (synchronous)
 **Behavior**: Move prompt to specified folder (null = root folder)
 **Errors**: `PROMPT_NOT_FOUND`, `FOLDER_NOT_FOUND`, `DATABASE_ERROR`
 
