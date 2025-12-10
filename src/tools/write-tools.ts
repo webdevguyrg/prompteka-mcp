@@ -133,6 +133,16 @@ export async function handleCreatePrompt(
     }
 
     const message = error instanceof Error ? error.message : "Unknown error";
+    const stack = error instanceof Error ? error.stack : undefined;
+    const errorType = error?.constructor?.name || typeof error;
+
+    // DEBUG: Log full error details
+    console.error("[MCP DEBUG] create_prompt error:", {
+      message,
+      stack,
+      errorType,
+    });
+
     logger.logError("create_prompt", ErrorCodes.INTERNAL_ERROR, duration, message);
 
     return {
@@ -141,6 +151,9 @@ export async function handleCreatePrompt(
         status: "error",
         error: ErrorCodes.INTERNAL_ERROR,
         message: "Failed to create prompt",
+        debug: message,
+        stack: stack,
+        errorType: errorType,
       }),
     };
   }
@@ -276,6 +289,16 @@ export async function handleUpdatePrompt(
     }
 
     const message = error instanceof Error ? error.message : "Unknown error";
+    const stack = error instanceof Error ? error.stack : undefined;
+    const errorType = error?.constructor?.name || typeof error;
+
+    // DEBUG: Log full error details
+    console.error("[MCP DEBUG] update_prompt error:", {
+      message,
+      stack,
+      errorType,
+    });
+
     logger.logError("update_prompt", ErrorCodes.INTERNAL_ERROR, duration, message);
 
     return {
@@ -284,6 +307,9 @@ export async function handleUpdatePrompt(
         status: "error",
         error: ErrorCodes.INTERNAL_ERROR,
         message: "Failed to update prompt",
+        debug: message,
+        stack: stack,
+        errorType: errorType,
       }),
     };
   }
@@ -455,6 +481,16 @@ export async function handleCreateFolder(
     }
 
     const message = error instanceof Error ? error.message : "Unknown error";
+    const stack = error instanceof Error ? error.stack : undefined;
+    const errorType = error?.constructor?.name || typeof error;
+
+    // DEBUG: Log full error details
+    console.error("[MCP DEBUG] create_folder error:", {
+      message,
+      stack,
+      errorType,
+    });
+
     logger.logError("create_folder", ErrorCodes.INTERNAL_ERROR, duration, message);
 
     return {
@@ -463,6 +499,9 @@ export async function handleCreateFolder(
         status: "error",
         error: ErrorCodes.INTERNAL_ERROR,
         message: "Failed to create folder",
+        debug: message,
+        stack: stack,
+        errorType: errorType,
       }),
     };
   }
@@ -569,6 +608,16 @@ export async function handleUpdateFolder(
     }
 
     const message = error instanceof Error ? error.message : "Unknown error";
+    const stack = error instanceof Error ? error.stack : undefined;
+    const errorType = error?.constructor?.name || typeof error;
+
+    // DEBUG: Log full error details
+    console.error("[MCP DEBUG] update_folder error:", {
+      message,
+      stack,
+      errorType,
+    });
+
     logger.logError("update_folder", ErrorCodes.INTERNAL_ERROR, duration, message);
 
     return {
@@ -577,6 +626,9 @@ export async function handleUpdateFolder(
         status: "error",
         error: ErrorCodes.INTERNAL_ERROR,
         message: "Failed to update folder",
+        debug: message,
+        stack: stack,
+        errorType: errorType,
       }),
     };
   }
