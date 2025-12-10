@@ -15,7 +15,7 @@
  * - Retry logic for SQLITE_BUSY (up to 3 attempts)
  * - Atomic transactions where needed
  * - Prepared statements (prevent injection)
- * - Timestamp generation (ISO 8601)
+ * - Timestamp generation (Unix seconds, matching Prompteka database schema)
  */
 
 import Database from "better-sqlite3";
@@ -948,17 +948,24 @@ export class PromptekaDatabaseAccessor {
     return this.executeWithRetry(() => {
       const transaction = this.db!.transaction(() => {
         const id = uuidv4() as UUID;
-        const now = new Date().toISOString();
+        const now = Math.floor(Date.now() / 1000); // Unix seconds
+
+        // Get the next position for this folder (max position + 1)
+        const maxPositionResult = this.db!
+          .prepare("SELECT MAX(position) as maxPos FROM folders WHERE parent_id IS ?")
+          .get(data.parentId || null) as { maxPos: number | null };
+        const nextPosition = (maxPositionResult.maxPos ?? -1) + 1;
 
         const stmt = this.db!.prepare(`
-          INSERT INTO folders (id, name, parent_id, created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?)
+          INSERT INTO folders (id, name, parent_id, position, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?)
         `);
 
         stmt.run(
           id,
           data.name,
           data.parentId || null,
+          nextPosition,
           now,
           now
         );
@@ -1041,7 +1048,7 @@ export class PromptekaDatabaseAccessor {
 
     this.executeWithRetry(() => {
       const transaction = this.db!.transaction(() => {
-        const now = new Date().toISOString();
+        const now = Math.floor(Date.now() / 1000); // Unix seconds
         const updates: string[] = [];
         const params: unknown[] = [];
 
@@ -1168,7 +1175,7 @@ export class PromptekaDatabaseAccessor {
 
     this.executeWithRetry(() => {
       const transaction = this.db!.transaction(() => {
-        const now = new Date().toISOString();
+        const now = Math.floor(Date.now() / 1000); // Unix seconds
 
         const stmt = this.db!.prepare(`
           UPDATE prompts
@@ -1224,8 +1231,7 @@ export class PromptekaDatabaseAccessor {
           const oldId = folder.id as string;
           const name = folder.name as string;
           const parentId = folder.parent_id as string | null | undefined;
-          const emoji = folder.emoji || null;
-          const color = folder.color || null;
+          // Note: Prompteka database doesn't store emoji/color for folders, only for prompts
 
           // Map parent folder ID if it exists in backup
           let mappedParentId: string | null = null;
@@ -1258,17 +1264,22 @@ export class PromptekaDatabaseAccessor {
 
           // Create new folder
           const newId = uuidv4() as UUID;
-          const now = new Date().toISOString();
+          const now = Math.floor(Date.now() / 1000); // Unix seconds
+
+          // Get the next position for this folder (max position + 1)
+          const maxPositionResult = this.db!
+            .prepare("SELECT MAX(position) as maxPos FROM folders WHERE parent_id IS ?")
+            .get(mappedParentId || null) as { maxPos: number | null };
+          const nextPosition = (maxPositionResult.maxPos ?? -1) + 1;
 
           this.db!.prepare(`
-            INSERT INTO folders (id, name, parent_id, emoji, color, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO folders (id, name, parent_id, position, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?)
           `).run(
             newId,
             name,
             mappedParentId || null,
-            emoji,
-            color,
+            nextPosition,
             now,
             now
           );
