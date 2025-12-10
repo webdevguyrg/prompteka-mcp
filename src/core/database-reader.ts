@@ -250,9 +250,9 @@ export class PromptekaDatabaseReader {
         SELECT
           id,
           title,
-          content,
+          body as content,
           folder_id as folderId,
-          emoji,
+          icon as emoji,
           color,
           url,
           created_at as createdAt,
@@ -313,9 +313,9 @@ export class PromptekaDatabaseReader {
         SELECT
           id,
           title,
-          content,
+          body as content,
           folder_id as folderId,
-          emoji,
+          icon as emoji,
           color,
           url,
           created_at as createdAt,
@@ -390,7 +390,7 @@ export class PromptekaDatabaseReader {
         // Use FTS if available
         countQuery = `
           SELECT COUNT(*) as count FROM prompts_fts
-          WHERE title MATCH ? OR content MATCH ?
+          WHERE title MATCH ? OR body MATCH ?
         `;
         params.push(searchQuery);
         params.push(searchQuery);
@@ -399,16 +399,16 @@ export class PromptekaDatabaseReader {
           SELECT
             p.id,
             p.title,
-            p.content,
+            p.body as content,
             p.folder_id as folderId,
-            p.emoji,
+            p.icon as emoji,
             p.color,
             p.url,
             p.created_at as createdAt,
             p.updated_at as updatedAt
           FROM prompts p
           INNER JOIN prompts_fts f ON p.id = f.rowid
-          WHERE f.title MATCH ? OR f.content MATCH ?
+          WHERE f.title MATCH ? OR f.body MATCH ?
           ORDER BY p.created_at DESC
           LIMIT ? OFFSET ?
         `;
@@ -419,7 +419,7 @@ export class PromptekaDatabaseReader {
         const likeQuery = `%${searchQuery}%`;
         countQuery = `
           SELECT COUNT(*) as count FROM prompts
-          WHERE title LIKE ? OR content LIKE ?
+          WHERE title LIKE ? OR body LIKE ?
         `;
         params.push(likeQuery);
         params.push(likeQuery);
@@ -428,15 +428,15 @@ export class PromptekaDatabaseReader {
           SELECT
             id,
             title,
-            content,
+            body as content,
             folder_id as folderId,
-            emoji,
+            icon as emoji,
             color,
             url,
             created_at as createdAt,
             updated_at as updatedAt
           FROM prompts
-          WHERE title LIKE ? OR content LIKE ?
+          WHERE title LIKE ? OR body LIKE ?
           ORDER BY created_at DESC
           LIMIT ? OFFSET ?
         `;
