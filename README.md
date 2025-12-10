@@ -2,7 +2,40 @@
 
 **Model Context Protocol server for Prompteka** - enables AI assistants to read and write your prompt library.
 
-Connect any MCP-compatible AI assistant to access and manage your Prompteka prompts programmatically.
+---
+
+## TL;DR
+
+**What is Prompteka?**
+[Prompteka](https://prompteka.net) is a native macOS app (available on the [App Store](https://apps.apple.com/app/prompteka/id6738107425)) that lets you organize, search, and manage your AI prompt library locally on your Mac. Think of it as a smart folder system for all your prompts with tagging, emojis, colors, and full-text search.
+
+**What does this MCP Server do?**
+This server enables AI assistants (like Claude in Claude Desktop or Claude Code) to directly access and manage your Prompteka library programmatically. Instead of manually copying prompts in and out, your AI assistant can:
+- 📖 Read and search your entire prompt library
+- ✍️ Create new prompts and organize them
+- 🎨 Update existing prompts with new content
+- 🗑️ Organize your library by moving prompts between folders
+
+**How do they work together?**
+```
+Your Mac
+├── Prompteka App (native macOS app on App Store)
+│   └── SQLite Database at ~/Library/Application Support/prompteka/prompts.db
+│       ↑ (reads/writes)
+└── This MCP Server (Node.js process)
+    └── Connects to same database via MCP protocol
+        ↑ (AI assistants read/write through MCP)
+```
+
+The MCP server connects directly to your Prompteka database, so changes made by the AI show up instantly in Prompteka, and vice versa. No syncing, no copying - everything is live.
+
+**Installation:**
+1. Have [Prompteka app](https://apps.apple.com/app/prompteka/id6738107425) installed
+2. `npm install -g prompteka-mcp`
+3. Configure in Claude Desktop/Code with the MCP config
+4. Start using: "Add this prompt to my Security folder"
+
+---
 
 ## Features
 
@@ -24,13 +57,22 @@ Works with or without Prompteka app running. Direct database access means zero d
 
 ## How It Works
 
+### Integration with Prompteka
+
+The MCP server connects directly to the same SQLite database that the Prompteka app uses. This means:
+
+- **Live Synchronization**: Changes made by the AI show up instantly in Prompteka (and vice versa)
+- **No Syncing Required**: Single source of truth - the local SQLite database
+- **Concurrent Safe**: Both Prompteka app and MCP server can operate simultaneously without conflicts
+- **Database Agnostic**: The MCP server doesn't depend on the Prompteka app being running
+
 ### Architecture Overview
 
 The Prompteka MCP Server operates in two modes:
 
 **Read Operations** (Fast, Direct Database Access)
-- Connects directly to your Prompteka SQLite database
-- Uses WAL (Write-Ahead Logging) mode for safe concurrent access
+- Connects directly to your Prompteka SQLite database at `~/Library/Application Support/prompteka/prompts.db`
+- Uses WAL (Write-Ahead Logging) mode for safe concurrent access with Prompteka app
 - Returns results in < 100ms
 - Does NOT interfere with Prompteka app operations
 
@@ -38,15 +80,16 @@ The Prompteka MCP Server operates in two modes:
 - Writes directly to Prompteka SQLite database using WAL mode
 - Uses atomic transactions with full ACID guarantees
 - Changes committed immediately (< 10ms)
+- Visible instantly to Prompteka app and other MCP clients
 - SQLite handles concurrent access safely
-- Works regardless of whether Prompteka app is running
 
 This unified approach ensures:
-- ✅ Sub-10ms response times (vs 200-500ms queue-based)
+- ✅ Sub-10ms response times (instant feedback)
 - ✅ No app dependency - MCP server operates standalone
 - ✅ Safe concurrent read-write with WAL mode
 - ✅ Automatic atomic rollback on errors
 - ✅ Zero orphaned operations or cleanup needed
+- ✅ Live updates between app and MCP server
 
 ### Database Location
 
@@ -109,11 +152,13 @@ This all happens in < 10ms, completely transparent to you. No app required to be
 
 ### Prerequisites
 
-- **Prompteka app** installed (just needs to have been opened once to create database)
+- **[Prompteka app](https://apps.apple.com/app/prompteka/id6738107425)** from the App Store installed on your Mac
+  - (Just needs to have been opened once to create the database)
+  - The app does NOT need to stay running - the MCP server accesses the database directly
 - **Node.js** 18.0.0 or newer
 - **npm** 9.0.0 or newer
 
-*Note: The Prompteka app does NOT need to be running for the MCP server to work. All reads and writes operate directly on the local database.*
+*Note: You can have Prompteka app and this MCP server running simultaneously with zero conflicts. They share the same SQLite database safely via WAL mode.*
 
 Check your versions:
 ```bash
@@ -349,18 +394,20 @@ Logs are structured JSON (no PII):
 
 ## Troubleshooting
 
-### "Queue directory not found"
+### "Database file not found" or "Queue directory not found"
 
-Ensure Prompteka is installed and has been opened at least once:
+This means the Prompteka app hasn't created its database yet. Ensure Prompteka is installed and has been opened at least once:
 
 ```bash
+# Download from App Store: https://apps.apple.com/app/prompteka/id6738107425
+# Or open if already installed:
 open /Applications/Prompteka.app
 ```
 
-Check the path:
+Once you've opened Prompteka once, check the database exists:
 
 ```bash
-ls -la ~/Library/Application\ Support/prompteka/
+ls -la ~/Library/Application\ Support/prompteka/prompts.db
 ```
 
 ### "Database is locked" or "SQLITE_BUSY"
@@ -377,18 +424,6 @@ The database write lock timed out after 5 seconds. This is rare but can happen i
 ls -la ~/Library/Application\ Support/prompteka/prompts.db*
 ```
 
-### "Database file not found"
-
-The MCP server can't find Prompteka's database. This usually means:
-- Prompteka app hasn't been launched yet (creates database on first run)
-- Database is in a non-standard location
-
-**Solution**: Either launch Prompteka once, or configure custom path:
-
-```bash
-export PROMPTEKA_DB_PATH="/path/to/prompts.db"
-prompteka-mcp
-```
 
 ## API Reference
 
@@ -488,11 +523,18 @@ This is a public project. Contributions welcome!
 
 MIT - See LICENSE file for details
 
-## Support
+## Support & Resources
 
-- **Documentation**: See `documentation/PRD.md`
-- **Issues**: GitHub Issues
-- **Prompteka Support**: https://prompteka.net/support.html
+### About Prompteka
+- **Official Website**: [prompteka.net](https://prompteka.net)
+- **App Store**: [Prompteka on Mac App Store](https://apps.apple.com/app/prompteka/id6738107425)
+- **Prompteka Support**: [prompteka.net/support.html](https://prompteka.net/support.html)
+- **Privacy Policy**: [prompteka.net/privacy-policy.html](https://prompteka.net/privacy-policy.html)
+
+### About This MCP Server
+- **Documentation**: See [`documentation/PRD.md`](./documentation/PRD.md) for complete API specification
+- **GitHub Issues**: [Report bugs or request features](https://github.com/webdevguyrg/prompteka-mcp/issues)
+- **Contributing**: See `CONTRIBUTING.md` for developer guidelines
 
 ## Privacy Policy
 
