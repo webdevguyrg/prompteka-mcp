@@ -106,6 +106,7 @@ All tools follow this contract:
 **Timeout**: 2 seconds
 **Max Results**: 1000 folders
 **Errors**: `DATABASE_ERROR`, `INVALID_INPUT`
+**Note**: The `parentId` field exists in the schema but nested folder creation is not yet supported in the Prompteka app UI. This field is reserved for future use.
 
 ---
 
@@ -229,8 +230,8 @@ All write tools follow this pattern:
     "title": { "type": "string", "minLength": 1, "maxLength": 255 },
     "content": { "type": "string", "minLength": 1, "maxLength": 100000 },
     "folderId": { "type": ["string", "null"], "pattern": "^[a-f0-9\\-]{36}$|^null$", "default": null },
-    "emoji": { "type": ["string", "null"], "maxLength": 2, "default": null },
-    "color": { "type": ["string", "null"], "enum": ["red", "orange", "yellow", "green", "blue", "purple", null], "default": null },
+    "emoji": { "type": ["string", "null"], "maxLength": 2, "default": "🤖" },
+    "color": { "type": ["string", "null"], "enum": ["red", "orange", "yellow", "green", "blue", "purple", null], "default": "blue" },
     "url": { "type": ["string", "null"], "format": "uri", "maxLength": 2048, "default": null }
   },
   "required": ["title", "content"],
@@ -254,6 +255,7 @@ All write tools follow this pattern:
 ```
 
 **Response Time**: < 10ms (synchronous)
+**Defaults**: If not specified, new prompts get 🤖 emoji and blue color
 **Errors**: See error taxonomy below
 
 ---
@@ -339,6 +341,7 @@ All write tools follow this pattern:
 
 **Response Time**: < 10ms (synchronous)
 **Errors**: `VALIDATION_ERROR`, `PARENT_FOLDER_NOT_FOUND`, `DATABASE_ERROR`, `INVALID_EMOJI`, `INVALID_COLOR`
+**Note**: The `parentId` field exists in the schema but nested folder creation is not yet supported in the Prompteka app UI. Always pass `null` for `parentId`.
 
 ---
 
@@ -364,6 +367,7 @@ All write tools follow this pattern:
 
 **Response Time**: < 10ms (synchronous)
 **Errors**: `VALIDATION_ERROR`, `FOLDER_NOT_FOUND`, `PARENT_FOLDER_NOT_FOUND`, `DATABASE_ERROR`, `INVALID_EMOJI`, `INVALID_COLOR`
+**Note**: The `parentId` field exists in the schema but nested folder modification is not yet supported in the Prompteka app UI. Always pass `null` for `parentId`.
 
 ---
 
@@ -385,7 +389,7 @@ All write tools follow this pattern:
 **Response**: Same as create_folder
 
 **Response Time**: < 10ms (synchronous)
-**Safety**: If `recursive=false` and folder has prompts/subfolders, returns error
+**Safety**: If `recursive=false` and folder has prompts, returns error
 **Errors**: `FOLDER_NOT_FOUND`, `FOLDER_NOT_EMPTY`, `DATABASE_ERROR`
 
 ---

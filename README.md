@@ -213,7 +213,7 @@ npm run build
 npm install -g .
 
 # Verify installation
-prompteka-mcp --version
+which prompteka-mcp  # Should show path to installed binary
 ```
 
 ### Step 2: Configure Your MCP Client
@@ -246,12 +246,10 @@ Then restart your MCP client.
 
 ### Step 3: Verify Installation
 
-Test the connection:
+Verify the binary is installed:
 
 ```bash
-# MCP client should now show Prompteka tools available
-# Try running: list_folders
-# Should return your Prompteka folders without errors
+which prompteka-mcp  # Should show path to installed binary
 ```
 
 ---
@@ -308,7 +306,7 @@ Log output appears in your MCP tool's console.
 ### Read-Only Tools (5 tools, Direct Database Access)
 
 **`list_folders`**
-Get all your folders with hierarchy and metadata.
+Get all your folders with metadata (emoji, color, counts).
 
 **`list_prompts`**
 Get prompts from a specific folder with pagination.
@@ -320,12 +318,12 @@ Get full details of a single prompt by ID.
 Full-text search across all prompt titles and content.
 
 **`health_check`**
-Verify MCP server and database are operational. Returns server version, available tools, and connectivity status.
+Verify MCP server and database are operational. Returns server version and connectivity status.
 
 ### Write Tools (7 tools, Direct Database Access)
 
 **`create_prompt`**
-Create a new prompt in a folder with emoji, color, and optional URL.
+Create a new prompt in a folder with emoji, color, and optional URL. Defaults to 🤖 emoji and blue color if not specified.
 
 **`update_prompt`**
 Modify an existing prompt (title, content, folder, emoji, color, URL).
@@ -376,7 +374,7 @@ Create variations of existing prompts with MCP integration - modify content, cat
 
 ### UC5: Backup & Migrate
 
-Export your entire library for backup purposes or migrate between systems/devices.
+Use the **Prompteka app's built-in export feature** to backup your entire library or migrate between systems. The MCP server provides read access for automation purposes, but full backup/restore operations are safely handled by the Prompteka app itself to ensure data integrity.
 
 ### UC6: Batch Operations
 
@@ -415,7 +413,7 @@ Real-world scenarios showing different states (no prompts, one prompt, multiple 
 | 🔨 **Rename Folder** | "Rename Security folder to SecOps" | ✅ Exists | N/A | Claude calls `update_folder` with new name | ✅ YES |
 | 🗑️ **Delete Empty Folder** | "Clean up old Test folder" | ✅ Empty folder exists | N/A (folder empty) | Claude calls `delete_folder` | ✅ YES |
 | 🗑️ **Delete with Contents** | "Remove Testing folder and all prompts in it" | ✅ Exists with prompts | ✅ Multiple | Claude asks user to confirm, then calls `delete_folder(recursive=true, confirmDelete=true)` | ✅ YES (with confirmation) |
-| ✅ **Health Check** | "Is the MCP server running?" | N/A | N/A | Claude calls `health_check`, gets server version, tool count, connectivity status | ✅ YES |
+| ✅ **Health Check** | "Is the MCP server running?" | N/A | N/A | Claude calls `health_check`, gets server version and connectivity status | ✅ YES |
 
 ---
 
@@ -495,7 +493,7 @@ Logs are structured JSON (no PII):
 
 ## Troubleshooting
 
-### "Database file not found" or "Queue directory not found"
+### "Database file not found"
 
 This means the Prompteka app hasn't created its database yet. Ensure Prompteka is installed and has been opened at least once:
 

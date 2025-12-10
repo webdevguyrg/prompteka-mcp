@@ -126,11 +126,11 @@ export const Schemas = {
       title: { type: "string", minLength: 1, maxLength: 255 },
       content: { type: "string", minLength: 1, maxLength: 100000 },
       folderId: { type: ["string", "null"], default: null },
-      emoji: { type: ["string", "null"], maxLength: 2, default: null },
+      emoji: { type: ["string", "null"], maxLength: 2, default: "🤖" },
       color: {
         type: ["string", "null"],
         enum: [...COLORS, null],
-        default: null,
+        default: "blue",
       },
       url: { type: ["string", "null"], format: "uri", maxLength: 2048, default: null },
     },

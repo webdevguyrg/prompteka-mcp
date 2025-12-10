@@ -158,7 +158,7 @@ Every tool MUST have:
 ### Tool Categories
 
 **Read Tools** (Direct DB, Immediate Response):
-- `list_folders` - All folders with hierarchy
+- `list_folders` - All folders with metadata
 - `list_prompts` - Paginated prompts by folder
 - `get_prompt` - Single prompt by ID
 - `search_prompts` - Full-text search with pagination

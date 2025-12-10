@@ -45,7 +45,7 @@ import { getLogger } from "../observability/logger.js";
 export function createCreatePromptTool(): Tool {
   return {
     name: "create_prompt",
-    description: "Create a new prompt in your Prompteka library",
+    description: "Create a new prompt in your Prompteka library (defaults: 🤖 emoji, blue color)",
     inputSchema: {
       type: "object",
       properties: {
@@ -68,12 +68,12 @@ export function createCreatePromptTool(): Tool {
         emoji: {
           type: ["string", "null"],
           maxLength: 2,
-          description: "Emoji (1-2 characters, optional)",
+          description: "Emoji (1-2 characters, default: 🤖)",
         },
         color: {
           type: ["string", "null"],
           enum: ["red", "orange", "yellow", "green", "blue", "purple", null],
-          description: "Color (optional)",
+          description: "Color (default: blue)",
         },
         url: {
           type: ["string", "null"],

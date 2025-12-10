@@ -310,12 +310,16 @@ export function validateCreatePromptInput(input: unknown): ValidatedCreatePrompt
 
   const obj = input as Record<string, unknown>;
 
+  // Apply defaults: 🤖 emoji and blue color if not provided
+  const emoji = obj.emoji === null || obj.emoji === undefined ? "🤖" : obj.emoji;
+  const color = obj.color === null || obj.color === undefined ? "blue" : obj.color;
+
   return {
     title: validateString(obj.title, "title", 1, 255),
     content: validatePromptContent(obj.content),
     folderId: validateUUIDOrNull(obj.folderId),
-    emoji: validateEmojiOrNull(obj.emoji),
-    color: validateColorOrNull(obj.color),
+    emoji: validateEmoji(emoji),
+    color: validateColor(color),
     url: validateURL(obj.url),
   };
 }
