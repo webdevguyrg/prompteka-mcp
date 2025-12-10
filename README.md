@@ -391,7 +391,6 @@ Real-world scenarios showing different states (no prompts, one prompt, multiple 
 | 🗑️ **Delete Empty Folder** | "Clean up old Test folder" | ✅ Empty folder exists | N/A (folder empty) | Claude calls `delete_folder` | ✅ YES |
 | 🗑️ **Delete with Contents** | "Remove Testing folder and all prompts in it" | ✅ Exists with prompts | ✅ Multiple | Claude needs to `delete_prompt` for each, then `delete_folder` | ✅ YES (manual but supported) |
 | ✅ **Health Check** | "Is the MCP server running?" | N/A | N/A | Claude calls `health_check`, gets server version, tool count, connectivity status | ✅ YES |
-| ✨ **Nested Folders** | "Create SubFolder under Work" | ✅ Work exists | N/A | Claude calls `create_folder` with `parentId=workFolderId` | ✅ YES |
 
 ---
 
