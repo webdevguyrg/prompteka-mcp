@@ -88,6 +88,7 @@ This all happens in < 10ms, completely transparent to you. No app required to be
 | `list_prompts` | Read | Get prompts from folder (paginated) |
 | `get_prompt` | Read | Get single prompt by ID |
 | `search_prompts` | Read | Full-text search across prompts |
+| `health_check` | Read | Verify MCP server and database operational |
 | `create_prompt` | Write | Create new prompt in folder |
 | `update_prompt` | Write | Modify existing prompt |
 | `delete_prompt` | Write | Delete prompt (idempotent) |
@@ -95,9 +96,6 @@ This all happens in < 10ms, completely transparent to you. No app required to be
 | `update_folder` | Write | Modify folder properties |
 | `delete_folder` | Write | Delete folder with safety checks |
 | `move_prompt` | Write | Move prompt to different folder |
-| `export_prompts` | Write | Export to JSON/CSV/Markdown |
-| `backup_prompts` | Write | Export entire library as ZIP |
-| `restore_prompts` | Write | Import library from backup |
 
 **Response Times:**
 - Read tools: < 100ms (direct database)
@@ -217,28 +215,6 @@ Or in your MCP config:
 }
 ```
 
-### Custom Database Path
-
-By default, the MCP server looks for Prompteka's database at:
-```
-~/Library/Application Support/prompteka/prompts.db
-```
-
-If your database is in a custom location, you can specify it:
-
-```json
-{
-  "mcpServers": {
-    "prompteka": {
-      "command": "prompteka-mcp",
-      "env": {
-        "PROMPTEKA_DB_PATH": "/custom/path/prompts.db"
-      }
-    }
-  }
-}
-```
-
 ### Logging Level
 
 Control verbosity:
@@ -260,9 +236,9 @@ Log output appears in your MCP tool's console.
 
 ---
 
-## Available Tools (14 Total)
+## Available Tools (12 Total)
 
-### Read-Only Tools (Immediate)
+### Read-Only Tools (5 tools, Direct Database Access)
 
 **`list_folders`**
 Get all your folders with hierarchy and metadata.
@@ -276,7 +252,10 @@ Get full details of a single prompt by ID.
 **`search_prompts`**
 Full-text search across all prompt titles and content.
 
-### Write Tools (Async, Via Queue)
+**`health_check`**
+Verify MCP server and database are operational. Returns server version, available tools, and connectivity status.
+
+### Write Tools (7 tools, Direct Database Access)
 
 **`create_prompt`**
 Create a new prompt in a folder with emoji, color, and optional URL.
@@ -285,7 +264,7 @@ Create a new prompt in a folder with emoji, color, and optional URL.
 Modify an existing prompt (title, content, folder, emoji, color, URL).
 
 **`delete_prompt`**
-Delete a prompt.
+Delete a prompt (idempotent - safe to retry).
 
 **`create_folder`**
 Create a new folder with optional emoji and color.
@@ -296,33 +275,11 @@ Rename or reorganize a folder.
 **`delete_folder`**
 Delete a folder (with safety checks to prevent accidental data loss).
 
-### Organization & Export Tools
-
 **`move_prompt`**
 Move a prompt to a different folder.
 - Move single prompt to new folder
 - Target can be any folder (or null for root)
 - Updates folder references automatically
-
-**`export_prompts`**
-Export prompts to various formats.
-- Formats: JSON (full data), CSV (tabular), Markdown (formatted)
-- Optional: Export entire library or just one folder
-- Includes metadata and folder structure
-
-### Data Management & Backup Tools
-
-**`backup_prompts`**
-Export your entire prompt library as a ZIP file.
-- Includes all prompts, folders, and metadata
-- Compressed for easy backup/sharing
-- Can be used to migrate between systems
-
-**`restore_prompts`**
-Import a previously exported prompt library from a backup file.
-- Merges with existing library (doesn't overwrite by default)
-- Option to overwrite conflicting prompts
-- Full validation before import
 
 ## Response Times
 
@@ -480,19 +437,21 @@ The MCP server uses a **read-direct, write-direct** pattern with SQLite WAL mode
 ┌─────────────────────────┐
 │  Prompteka MCP Server   │
 ├─────────────────────────┤
-│ Read Operations:        │ (Direct DB access)
+│ Read Operations (5):    │ (Direct DB access)
 │ ├─ list_folders         │ < 100ms
 │ ├─ list_prompts         │
 │ ├─ get_prompt           │
-│ └─ search_prompts       │
+│ ├─ search_prompts       │
+│ └─ health_check         │
 │                         │
-│ Write Operations:       │ (Direct DB access)
+│ Write Operations (7):   │ (Direct DB access)
 │ ├─ create_prompt        │ < 10ms
 │ ├─ update_prompt        │ (atomic transactions)
 │ ├─ delete_prompt        │
 │ ├─ create_folder        │
 │ ├─ update_folder        │
-│ └─ delete_folder        │
+│ ├─ delete_folder        │
+│ └─ move_prompt          │
 └────┬──────────────────┬─┘
      │ Direct Read      │ Direct Write
      │ (WAL mode)       │ (WAL mode)

@@ -24,7 +24,7 @@ npm install
 npm run build
 ```
 
-Compiles TypeScript to JavaScript in the `dist/` folder.
+Compiles TypeScript to JavaScript in the `build/` folder.
 
 ### Development Mode
 
@@ -55,12 +55,12 @@ npm run type-check    # TypeScript type checking
 src/
 ├── core/
 │   ├── database-reader.ts    # SQLite read operations
-│   ├── queue-writer.ts       # Import queue handling
-│   └── types.ts              # Domain types
+│   ├── database-accessor.ts  # SQLite write operations (transactions)
+│   └── types.ts              # Domain types (Prompt, Folder, UUID, etc.)
 ├── tools/
-│   ├── index.ts              # Tool registry
-│   ├── read-tools.ts         # 4 read-only tools
-│   └── write-tools.ts        # 10 write tools
+│   ├── index.ts              # Tool registry and exports
+│   ├── read-tools.ts         # 5 read-only tools
+│   └── write-tools.ts        # 7 write tools
 ├── validation/
 │   ├── input-validator.ts    # Input validation
 │   ├── schemas.ts            # JSON schemas

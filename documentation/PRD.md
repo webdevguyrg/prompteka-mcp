@@ -9,17 +9,14 @@
 ## Overview
 
 An MCP (Model Context Protocol) server providing AI assistants with full access to Prompteka's prompt library via direct SQLite database access:
-- **Reads** (4 tools): Direct SQLite database access (fast, < 100ms, no app required)
-- **Writes** (10 tools): Direct SQLite database writes using WAL mode (immediate, < 10ms, no app required)
+- **Reads** (5 tools): Direct SQLite database access (fast, < 100ms, no app required)
+- **Writes** (7 tools): Direct SQLite database writes using WAL mode (immediate, < 10ms, no app required)
 
-**14 Total Tools**:
-- **Read-Only**: list_folders, list_prompts, get_prompt, search_prompts
-- **Write Operations**: create_prompt, update_prompt, delete_prompt, create_folder, update_folder, delete_folder
-- **Organization**: move_prompt
-- **Export**: export_prompts (JSON, CSV, Markdown)
-- **Data Management**: backup_prompts, restore_prompts
+**12 Total Tools**:
+- **Read-Only** (5): list_folders, list_prompts, get_prompt, search_prompts, health_check
+- **Write Operations** (7): create_prompt, update_prompt, delete_prompt, create_folder, update_folder, delete_folder, move_prompt
 
-Enables: "Save this prompt to my Security folder", "Move all testing prompts to QA folder", "Export my prompts as CSV", "Export entire library as backup".
+Enables: "Save this prompt to my Security folder", "Move all testing prompts to QA folder", "Organize my library automatically", "Verify the MCP server is running".
 
 ## Architecture
 

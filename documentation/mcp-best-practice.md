@@ -26,7 +26,7 @@ This document defines the non-negotiable standards for Prompteka MCP server. The
 
 **Single Responsibility** - Each module has ONE reason to change
 - `DatabaseReader` - Only reads from SQLite
-- `QueueWriter` - Only writes/reads JSON files
+- `DatabaseAccessor` - Only writes to SQLite (with transactions)
 - `InputValidator` - Only validates tool inputs
 - `MCPTools` - Only bridges MCP protocol and core logic
 - `Logger` - Only logs (structured, no side effects)
@@ -43,12 +43,12 @@ This document defines the non-negotiable standards for Prompteka MCP server. The
 
 **Interface Segregation** - Small, focused interfaces
 - DatabaseReader has only read methods
-- QueueWriter has only write/poll methods
+- DatabaseAccessor has only write methods (transactions)
 - Validator has only validation methods
 - No interface pollution
 
 **Dependency Inversion** - Depend on abstractions, not concretions
-- Tools depend on `DatabaseReader` interface, not implementation
+- Tools depend on `DatabaseReader` and `DatabaseAccessor` interfaces, not implementations
 - Tests inject mock implementations
 - DB path is injected, not hardcoded
 - Logger is injected, not global
@@ -60,20 +60,18 @@ This document defines the non-negotiable standards for Prompteka MCP server. The
 src/
 ├── core/
 │   ├── database-reader.ts      # SQLite read operations
-│   ├── queue-writer.ts         # File queue write operations
-│   └── types.ts                # Shared types (Op, Response, etc.)
+│   ├── database-accessor.ts    # SQLite write operations (transactions)
+│   └── types.ts                # Shared types (Prompt, Folder, UUID, etc.)
 ├── tools/
-│   ├── index.ts                # Tool registry and routing
-│   ├── read-tools.ts           # 4 read-only tools
-│   └── write-tools.ts          # 6 write tools
+│   ├── index.ts                # Tool registry and exports
+│   ├── read-tools.ts           # 5 read-only tools
+│   └── write-tools.ts          # 7 write tools
 ├── validation/
 │   ├── input-validator.ts      # Input schema validation
 │   ├── schemas.ts              # JSON schemas (reusable)
 │   └── error-taxonomy.ts       # Error codes and messages
 ├── observability/
-│   ├── logger.ts               # Structured logging
-│   ├── metrics.ts              # Optional counters
-│   └── health.ts               # Health checks
+│   └── logger.ts               # Structured logging
 └── server.ts                   # MCP server setup
 ```
 
