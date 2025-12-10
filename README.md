@@ -363,28 +363,35 @@ Perform bulk changes - update colors, reorganize folders, or apply metadata to m
 
 Real-world scenarios showing different states (no prompts, one prompt, multiple prompts) and whether they're currently supported:
 
+**Legend**:
+- ✨ = Create new prompt/folder(s)
+- 📖 = Read/search/retrieve existing
+- 🔨 = Modify/update existing
+- 🗑️ = Delete
+- ✅ = System check
+
 | Scenario | User Action | Folder State | Prompt State | What Happens | Currently Supported |
 |----------|-------------|--------------|--------------|--------------|---------------------|
-| **Save Generated Prompt** | "Save this as 'Security Checklist' in Security folder" | Folder exists | ❌ New | Claude calls `create_prompt` with title, content, folderId | ✅ YES |
-| **Save Without Folder** | "Save that as 'Quick Test'" | ❌ Must choose or create | ❌ New | Claude calls `list_folders`, user picks, then `create_prompt` | ✅ YES |
-| **Save & Create Folder** | "Save as 'Testing' in new folder 'QA'" | ❌ Doesn't exist | ❌ New | Claude calls `create_folder`, then `create_prompt` | ✅ YES |
-| **Find & Run Prompt** | "Run my code review prompt" | ✅ Single exists | ✅ Single match | Claude calls `search_prompts("code review")`, gets result, executes it | ✅ YES |
-| **Ambiguous Search** | "Run code review prompt" | ✅ Exists | ✅ Multiple matches (General, Security, Performance) | Claude calls `search_prompts`, shows numbered list, user picks, executes | ✅ YES |
-| **Run from Folder** | "Run all testing prompts" | ✅ Testing folder exists | ✅ Multiple (5 prompts) | Claude calls `list_prompts(folderId)`, shows all 5, user selects or runs all sequentially | ✅ YES |
-| **Search All Prompts** | "Find prompts about authentication" | N/A | ✅ Found 3 matches | Claude calls `search_prompts("authentication")`, shows: Password Auth, OAuth, SAML | ✅ YES |
-| **Save Prompt Variation** | "Save this variant as 'Code Review v2'" in existing folder | ✅ Exists | ❌ New (variation) | Claude calls `create_prompt` in same folder, user can now switch between v1 and v2 | ✅ YES |
-| **Update Existing Prompt** | "Update my security prompt with this new content" | ✅ Exists | ✅ Single found | Claude calls `search_prompts`, confirms ID, calls `update_prompt` | ✅ YES |
-| **Move Prompt** | "Move this prompt from Personal to Work" | ✅ Both exist | ✅ Found | Claude calls `move_prompt` to change folderId | ✅ YES |
-| **Organize by Folder** | "Create folders for Work, Personal, Testing" | ❌ Don't exist | N/A | Claude calls `create_folder` 3 times with different names | ✅ YES |
-| **List Everything** | "Show me all my prompts organized by folder" | ✅ Multiple | ✅ Multiple | Claude calls `list_folders`, then `list_prompts` for each folder | ✅ YES |
-| **Batch Review** | "Run all security prompts against this code" | ✅ Security folder exists | ✅ Multiple (5 security prompts) | Claude calls `list_prompts(securityFolderId)`, runs each one, compares results | ✅ YES |
-| **Prompt Chain** | "Walk me through: Setup > Configure > Deploy" | ✅ Exists | ✅ 3 prompts in sequence | Claude calls `search_prompts` for each, executes in order with context passed between | ✅ YES |
-| **Delete Old Prompt** | "Remove the old password prompt" | ✅ Exists | ✅ Single found | Claude calls `search_prompts("password")`, confirms ID, calls `delete_prompt` | ✅ YES |
-| **Rename Folder** | "Rename Security folder to SecOps" | ✅ Exists | N/A | Claude calls `update_folder` with new name | ✅ YES |
-| **Delete Empty Folder** | "Clean up old Test folder" | ✅ Empty folder exists | N/A (folder empty) | Claude calls `delete_folder` | ✅ YES |
-| **Delete with Contents** | "Remove Testing folder and all prompts in it" | ✅ Exists with prompts | ✅ Multiple | Claude needs to `delete_prompt` for each, then `delete_folder` | ✅ YES (manual but supported) |
-| **Health Check** | "Is the MCP server running?" | N/A | N/A | Claude calls `health_check`, gets server version, tool count, connectivity status | ✅ YES |
-| **Nested Folders** | "Create SubFolder under Work" | ✅ Work exists | N/A | Claude calls `create_folder` with `parentId=workFolderId` | ✅ YES |
+| ✨ **Save Generated Prompt** | "Save this as 'Security Checklist' in Security folder" | Folder exists | ❌ New | Claude calls `create_prompt` with title, content, folderId | ✅ YES |
+| ✨ **Save Without Folder** | "Save that as 'Quick Test'" | ❌ Must choose or create | ❌ New | Claude calls `list_folders`, user picks, then `create_prompt` | ✅ YES |
+| ✨✨ **Save & Create Folder** | "Save as 'Testing' in new folder 'QA'" | ❌ Doesn't exist | ❌ New | Claude calls `create_folder`, then `create_prompt` | ✅ YES |
+| 📖 **Find & Run Prompt** | "Run my code review prompt" | ✅ Single exists | ✅ Single match | Claude calls `search_prompts("code review")`, gets result, executes it | ✅ YES |
+| 📖 **Ambiguous Search** | "Run code review prompt" | ✅ Exists | ✅ Multiple matches (General, Security, Performance) | Claude calls `search_prompts`, shows numbered list, user picks, executes | ✅ YES |
+| 📖 **Run from Folder** | "Run all testing prompts" | ✅ Testing folder exists | ✅ Multiple (5 prompts) | Claude calls `list_prompts(folderId)`, shows all 5, user selects or runs all sequentially | ✅ YES |
+| 📖 **Search All Prompts** | "Find prompts about authentication" | N/A | ✅ Found 3 matches | Claude calls `search_prompts("authentication")`, shows: Password Auth, OAuth, SAML | ✅ YES |
+| ✨ **Save Prompt Variation** | "Save this variant as 'Code Review v2'" in existing folder | ✅ Exists | ❌ New (variation) | Claude calls `create_prompt` in same folder, user can now switch between v1 and v2 | ✅ YES |
+| 🔨 **Update Existing Prompt** | "Update my security prompt with this new content" | ✅ Exists | ✅ Single found | Claude calls `search_prompts`, confirms ID, calls `update_prompt` | ✅ YES |
+| 🔨 **Move Prompt** | "Move this prompt from Personal to Work" | ✅ Both exist | ✅ Found | Claude calls `move_prompt` to change folderId | ✅ YES |
+| ✨✨✨ **Organize by Folder** | "Create folders for Work, Personal, Testing" | ❌ Don't exist | N/A | Claude calls `create_folder` 3 times with different names | ✅ YES |
+| 📖 **List Everything** | "Show me all my prompts organized by folder" | ✅ Multiple | ✅ Multiple | Claude calls `list_folders`, then `list_prompts` for each folder | ✅ YES |
+| 📖 **Batch Review** | "Run all security prompts against this code" | ✅ Security folder exists | ✅ Multiple (5 security prompts) | Claude calls `list_prompts(securityFolderId)`, runs each one, compares results | ✅ YES |
+| 📖 **Prompt Chain** | "Walk me through: Setup > Configure > Deploy" | ✅ Exists | ✅ 3 prompts in sequence | Claude calls `search_prompts` for each, executes in order with context passed between | ✅ YES |
+| 🗑️ **Delete Old Prompt** | "Remove the old password prompt" | ✅ Exists | ✅ Single found | Claude calls `search_prompts("password")`, confirms ID, calls `delete_prompt` | ✅ YES |
+| 🔨 **Rename Folder** | "Rename Security folder to SecOps" | ✅ Exists | N/A | Claude calls `update_folder` with new name | ✅ YES |
+| 🗑️ **Delete Empty Folder** | "Clean up old Test folder" | ✅ Empty folder exists | N/A (folder empty) | Claude calls `delete_folder` | ✅ YES |
+| 🗑️ **Delete with Contents** | "Remove Testing folder and all prompts in it" | ✅ Exists with prompts | ✅ Multiple | Claude needs to `delete_prompt` for each, then `delete_folder` | ✅ YES (manual but supported) |
+| ✅ **Health Check** | "Is the MCP server running?" | N/A | N/A | Claude calls `health_check`, gets server version, tool count, connectivity status | ✅ YES |
+| ✨ **Nested Folders** | "Create SubFolder under Work" | ✅ Work exists | N/A | Claude calls `create_folder` with `parentId=workFolderId` | ✅ YES |
 
 ---
 
