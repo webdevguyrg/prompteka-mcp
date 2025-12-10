@@ -955,8 +955,9 @@ export class PromptekaDatabaseAccessor {
         const now = Math.floor(Date.now() / 1000); // Unix seconds
 
         // Get the next position for this folder (max position + 1)
+        // Use COALESCE for NULL-safe comparison
         const maxPositionResult = this.db!
-          .prepare("SELECT MAX(position) as maxPos FROM folders WHERE parent_id = ?")
+          .prepare("SELECT MAX(position) as maxPos FROM folders WHERE COALESCE(parent_id, '') = COALESCE(?, '')")
           .get(data.parentId || null) as { maxPos: number | null };
         const nextPosition = (maxPositionResult.maxPos ?? -1) + 1;
 
@@ -1271,8 +1272,9 @@ export class PromptekaDatabaseAccessor {
           const now = Math.floor(Date.now() / 1000); // Unix seconds
 
           // Get the next position for this folder (max position + 1)
+          // Use COALESCE for NULL-safe comparison
           const maxPositionResult = this.db!
-            .prepare("SELECT MAX(position) as maxPos FROM folders WHERE parent_id = ?")
+            .prepare("SELECT MAX(position) as maxPos FROM folders WHERE COALESCE(parent_id, '') = COALESCE(?, '')")
             .get(mappedParentId || null) as { maxPos: number | null };
           const nextPosition = (maxPositionResult.maxPos ?? -1) + 1;
 
