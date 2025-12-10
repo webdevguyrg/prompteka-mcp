@@ -280,13 +280,11 @@ export class PromptekaDatabaseAccessor {
     parentId: UUID | null | undefined
   ): Folder | null {
     const result = this.db!
-      .prepare("SELECT id, name, parent_id as parentId, emoji, color, created_at as createdAt, updated_at as updatedAt FROM folders WHERE name = ? AND parent_id IS ?")
+      .prepare("SELECT id, name, parent_id as parentId, created_at as createdAt, updated_at as updatedAt FROM folders WHERE name = ? AND parent_id IS ?")
       .get(name, parentId || null) as {
       id: UUID;
       name: string;
       parentId: UUID | null;
-      emoji?: string;
-      color?: string;
       createdAt: string;
       updatedAt: string;
     } | undefined;
@@ -391,8 +389,6 @@ export class PromptekaDatabaseAccessor {
           id,
           name,
           parent_id as parentId,
-          emoji,
-          color,
           created_at as createdAt,
           updated_at as updatedAt
         FROM folders
@@ -403,8 +399,6 @@ export class PromptekaDatabaseAccessor {
         id: UUID;
         name: string;
         parentId: UUID | null;
-        emoji?: string;
-        color?: string;
         createdAt: string;
         updatedAt: string;
       }>;
@@ -413,8 +407,6 @@ export class PromptekaDatabaseAccessor {
         id: f.id as UUID,
         name: f.name,
         parentId: f.parentId as UUID | null | undefined,
-        emoji: f.emoji as Emoji | null | undefined,
-        color: f.color as PromptColor | null | undefined,
         createdAt: f.createdAt,
         updatedAt: f.updatedAt,
       }));
@@ -1330,8 +1322,6 @@ export class PromptekaDatabaseAccessor {
           id,
           name,
           parent_id as parentId,
-          emoji,
-          color,
           created_at as createdAt,
           updated_at as updatedAt
         FROM folders
@@ -1342,8 +1332,6 @@ export class PromptekaDatabaseAccessor {
         id: UUID;
         name: string;
         parentId: UUID | null;
-        emoji?: string;
-        color?: string;
         createdAt: string;
         updatedAt: string;
       } | undefined;
