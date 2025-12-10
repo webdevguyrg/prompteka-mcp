@@ -321,8 +321,12 @@ export class PromptekaDatabaseAccessor {
     name: string,
     parentId: UUID | null | undefined
   ): Folder | null {
+    // Properly handle NULL comparisons: use COALESCE to compare NULL-safe
     const result = this.db!
-      .prepare("SELECT id, name, parent_id as parentId, created_at as createdAt, updated_at as updatedAt FROM folders WHERE name = ? AND parent_id IS ?")
+      .prepare(
+        "SELECT id, name, parent_id as parentId, created_at as createdAt, updated_at as updatedAt FROM folders " +
+        "WHERE name = ? AND COALESCE(parent_id, '') = COALESCE(?, '')"
+      )
       .get(name, parentId || null) as {
       id: UUID;
       name: string;
@@ -952,7 +956,7 @@ export class PromptekaDatabaseAccessor {
 
         // Get the next position for this folder (max position + 1)
         const maxPositionResult = this.db!
-          .prepare("SELECT MAX(position) as maxPos FROM folders WHERE parent_id IS ?")
+          .prepare("SELECT MAX(position) as maxPos FROM folders WHERE parent_id = ?")
           .get(data.parentId || null) as { maxPos: number | null };
         const nextPosition = (maxPositionResult.maxPos ?? -1) + 1;
 
@@ -1268,7 +1272,7 @@ export class PromptekaDatabaseAccessor {
 
           // Get the next position for this folder (max position + 1)
           const maxPositionResult = this.db!
-            .prepare("SELECT MAX(position) as maxPos FROM folders WHERE parent_id IS ?")
+            .prepare("SELECT MAX(position) as maxPos FROM folders WHERE parent_id = ?")
             .get(mappedParentId || null) as { maxPos: number | null };
           const nextPosition = (maxPositionResult.maxPos ?? -1) + 1;
 
