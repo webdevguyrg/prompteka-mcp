@@ -27,7 +27,7 @@ Your Mac
         ↑ (AI assistants read/write through MCP)
 ```
 
-The MCP server connects directly to your Prompteka database, so changes made by the AI show up instantly in Prompteka, and vice versa. No syncing, no copying - everything is live.
+The MCP server connects directly to your Prompteka database, so changes made by the AI are persisted immediately to the database. Refresh the Prompteka app to see updates in the UI. No syncing, no copying - single source of truth.
 
 **Installation:**
 1. Have [Prompteka app](https://apps.apple.com/app/prompteka/id6738107425) installed
@@ -83,10 +83,11 @@ Works with or without Prompteka app running. Direct database access means zero d
 
 The MCP server connects directly to the same SQLite database that the Prompteka app uses. This means:
 
-- **Live Synchronization**: Changes made by the AI show up instantly in Prompteka (and vice versa)
-- **No Syncing Required**: Single source of truth - the local SQLite database
+- **Database-Level Persistence**: Changes made by the AI are committed to the database immediately (< 10ms)
+- **Single Source of Truth**: The local SQLite database is the only copy of your data
 - **Concurrent Safe**: Both Prompteka app and MCP server can operate simultaneously without conflicts
-- **Database Agnostic**: The MCP server doesn't depend on the Prompteka app being running
+- **App-Independent**: The MCP server doesn't depend on the Prompteka app being running
+- **UI Refresh Required**: Refresh the Prompteka app (⌘R or Refresh button) to see changes in the UI
 
 ### Architecture Overview
 
@@ -98,20 +99,21 @@ The Prompteka MCP Server operates in two modes:
 - Returns results in < 100ms
 - Does NOT interfere with Prompteka app operations
 
-**Write Operations** (Instant, Direct Database Access)
+**Write Operations** (Immediate Database Persistence)
 - Writes directly to Prompteka SQLite database using WAL mode
 - Uses atomic transactions with full ACID guarantees
 - Changes committed immediately (< 10ms)
-- Visible instantly to Prompteka app and other MCP clients
+- Available to other MCP read operations and SQLite clients immediately
+- Prompteka app UI updates upon refresh (⌘R or Refresh button)
 - SQLite handles concurrent access safely
 
 This unified approach ensures:
-- ✅ Sub-10ms response times (instant feedback)
+- ✅ Sub-10ms database persistence (immediate data availability)
 - ✅ No app dependency - MCP server operates standalone
 - ✅ Safe concurrent read-write with WAL mode
 - ✅ Automatic atomic rollback on errors
 - ✅ Zero orphaned operations or cleanup needed
-- ✅ Live updates between app and MCP server
+- ✅ Single source of truth - the local SQLite database
 
 ### Database Location
 
@@ -136,12 +138,13 @@ When you use write tools (create_prompt, update_prompt, etc.), here's what happe
 
 5. **Response**: Returns success/error response immediately (< 10ms typical)
 
-6. **Visibility**: Changes are immediately visible to:
-   - Other MCP read operations
-   - Prompteka app via SQLite WAL mechanism
-   - Any other SQLite clients accessing the database
+6. **Visibility**: Changes are immediately available to:
+   - Other MCP read operations (instant)
+   - Prompteka app database queries (instant)
+   - Prompteka app UI (upon refresh with ⌘R or Refresh button)
+   - Any other SQLite clients accessing the database (instant)
 
-This all happens in < 10ms, completely transparent to you. No app required to be running.
+This all happens in < 10ms at the database level. No app required to be running. Refresh the Prompteka app to see changes reflected in the UI.
 
 ---
 
