@@ -526,6 +526,16 @@ The database write lock timed out after 5 seconds. This is rare but can happen i
 ls -la ~/Library/Application\ Support/prompteka/prompts.db*
 ```
 
+### Changes via MCP not showing in Prompteka app
+
+If you've made changes to your prompts through MCP (via Claude, Cursor, etc.) and the Prompteka app is open, you may need to refresh the app to see the latest data.
+
+**Solution**: Refresh the Prompteka app:
+- **Click the "Refresh" button** in the top toolbar
+- **Keyboard shortcut**: Press `⌘R` (Command+R)
+
+The MCP server writes directly to the database, so changes are persistent immediately. The app refresh simply reloads the UI to display the updated data.
+
 
 ## API Reference
 
