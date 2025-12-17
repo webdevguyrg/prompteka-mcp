@@ -28,7 +28,33 @@ import { getLogger } from "../observability/logger.js";
 const PROMPTEKA_SCHEMA_VERSION = 10; // Current Prompteka schema version
 
 /**
+ * Prompteka bundle identifier for App Store (sandboxed) version
+ */
+const PROMPTEKA_BUNDLE_ID = "com.robertgrow.prompteka";
+
+/**
+ * Get the sandboxed database path (App Store version)
+ */
+function getSandboxedDbPath(): string {
+  return path.join(
+    os.homedir(),
+    `Library/Containers/${PROMPTEKA_BUNDLE_ID}/Data/Library/Application Support/prompteka/prompts.db`
+  );
+}
+
+/**
+ * Get the non-sandboxed database path (dev/direct distribution)
+ */
+function getNonSandboxedDbPath(): string {
+  return path.join(
+    os.homedir(),
+    "Library/Application Support/prompteka/prompts.db"
+  );
+}
+
+/**
  * Validates that a path is safe (no symlinks, no traversal)
+ * Accepts both sandboxed (App Store) and non-sandboxed paths
  */
 function validatePath(filePath: string): void {
   // Check for path traversal attempts
@@ -39,17 +65,26 @@ function validatePath(filePath: string): void {
     );
   }
 
-  // Get real path and verify it doesn't resolve outside expected location
+  // Get real path and verify it's in an allowed location
   const realPath = fs.realpathSync(filePath);
-  const expectedBase = path.join(
+
+  // Allowed base paths: sandboxed (App Store) and non-sandboxed (dev)
+  const sandboxedBase = path.join(
+    os.homedir(),
+    `Library/Containers/${PROMPTEKA_BUNDLE_ID}/Data/Library/Application Support/prompteka`
+  );
+  const nonSandboxedBase = path.join(
     os.homedir(),
     "Library/Application Support/prompteka"
   );
 
-  if (!realPath.startsWith(expectedBase)) {
+  const isInSandboxed = realPath.startsWith(sandboxedBase);
+  const isInNonSandboxed = realPath.startsWith(nonSandboxedBase);
+
+  if (!isInSandboxed && !isInNonSandboxed) {
     throw new PromptekaMCPError(
       ErrorCodes.PERMISSION_DENIED,
-      `Path must be under ${expectedBase}`
+      `Path must be under ${sandboxedBase} or ${nonSandboxedBase}`
     );
   }
 
@@ -78,25 +113,49 @@ export class PromptekaDatabaseReader {
   private isOpen = false;
 
   constructor(dbPath?: string) {
-    // Determine database path
+    // Determine database path with priority:
+    // 1. Explicit dbPath parameter
+    // 2. PROMPTEKA_DB_PATH environment variable
+    // 3. Sandboxed path (App Store version)
+    // 4. Non-sandboxed path (dev/direct distribution)
+
     if (dbPath) {
       validatePath(dbPath);
       this.dbPath = dbPath;
-    } else {
-      // Auto-detect Prompteka database location
-      const defaultPath = path.join(
-        os.homedir(),
-        "Library/Application Support/prompteka/prompts.db"
-      );
-
-      if (!fs.existsSync(defaultPath)) {
+    } else if (process.env.PROMPTEKA_DB_PATH) {
+      const envPath = process.env.PROMPTEKA_DB_PATH.replace(/^~/, os.homedir());
+      if (!fs.existsSync(envPath)) {
         throw new PromptekaMCPError(
           ErrorCodes.INTERNAL_ERROR,
-          `Prompteka database not found at ${defaultPath}. Make sure Prompteka is installed.`
+          `Prompteka database not found at ${envPath} (from PROMPTEKA_DB_PATH). Verify the path is correct.`
         );
       }
+      validatePath(envPath);
+      this.dbPath = envPath;
+    } else {
+      // Auto-detect: check sandboxed (App Store) first, then non-sandboxed (dev)
+      const sandboxedPath = getSandboxedDbPath();
+      const nonSandboxedPath = getNonSandboxedDbPath();
 
-      this.dbPath = defaultPath;
+      if (fs.existsSync(sandboxedPath)) {
+        this.dbPath = sandboxedPath;
+        getLogger().logDebug("database-reader", "Using App Store (sandboxed) database", {
+          path: sandboxedPath,
+        });
+      } else if (fs.existsSync(nonSandboxedPath)) {
+        this.dbPath = nonSandboxedPath;
+        getLogger().logDebug("database-reader", "Using non-sandboxed database", {
+          path: nonSandboxedPath,
+        });
+      } else {
+        throw new PromptekaMCPError(
+          ErrorCodes.INTERNAL_ERROR,
+          `Prompteka database not found. Checked:\n` +
+            `  - App Store: ${sandboxedPath}\n` +
+            `  - Dev/Direct: ${nonSandboxedPath}\n` +
+            `Make sure Prompteka is installed and has been opened at least once.`
+        );
+      }
     }
   }
 
